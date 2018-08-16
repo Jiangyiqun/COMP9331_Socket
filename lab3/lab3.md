@@ -2,7 +2,7 @@
 
 - Author: Yiqun Jiang
 - zID: z5129432
-- Date: Aug 15, 2018
+- Date: Aug 16, 2018
 
 ## Question 1. What is the IP address of www.cecs.anu.edu.au . What type of DNS query is sent to get this answer?
 
