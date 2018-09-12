@@ -1,3 +1,5 @@
+written by Jack Jiang(z5129432) at Sep 12, 2018
+
 # Revision of TCP Congestion Control
 
 ## Question 1. Name the loss events that occur at 1 and 2. Explain why the congestion window is changed differently in those two cases.
@@ -22,10 +24,10 @@
 
 ## Question 1:
 
-![](./q1_plot.png)
+![](./q1_polt.png)
 
 ### What is the maximum size of the congestion window that the TCP flow reaches in this case?
-- 69
+- about 69
 
 ### What does the TCP flow do when the congestion window reaches this value? Why? 
 - it set to 1
@@ -35,8 +37,7 @@
 - it start to grow exponentially before reach the threhold
 - after that, it start to increase linearly
 
-## Question 2:What is the average throughput of TCP in this case? (both in number of packets per second and bps) 
-
+## Question 2: What is the average throughput of TCP in this case? (both in number of packets per second and bps) 
 ![](./q1_throughput.png)
 
 - 190 packets/second
@@ -56,20 +57,20 @@
 
 ### How does the actual average throughput compare to the link capacity (1Mbps)? 
 
-- the actual average throughput is close to the link capacity.
+- the actual average throughput is less thant and close to the link capacity.
 
 ## Question 4: Repeat the steps outlined in Question 1 and 2 (NOT Question 3) but for TCP Reno. Compare the graphs for the two implementations and explain the differences. (Hint: compare the number of times the congestion window goes back to zero in each case). 
 
 ![](./q1_polt_reno.png)
 
-- in Tahoe, the graph goes to zero every 10 seconds
-- in Reno, the graph only goes to zero at the begining
+- For Tahoe, the graph goes to zero every 10 seconds
+- For Reno, the graph only goes to zero at the begining
 
 ### How does the average throughput differ in both implementations? 
 
 ![](./q1_throughput_reno.png)
 
-- the average throughput of Reno is highter, because the instance throughput only drops to half instead of zero in Reno.
+- the average throughput for Reno is highter, because the instance throughput only drops to half instead of zero in Reno.
 
 # Exercise 2: Flow Fairness with TCP
 
@@ -77,13 +78,13 @@
 
 ## Question 1: Does each flow get an equal share of the capacity of the common link (i.e., is TCP fair) ? Explain which observations lead you to this conclusion.
 
--yes, becasue all the TCP flows' throughput are about 20 packages/seconds
+-Yes, becasue all the TCP flows' throughput are about 20 packages/seconds.
 
 ## Question 2. 
 
 ### What happens to the throughput of the pre-existing TCP flows when a new flow is created? 
 
-- the pre-existing TCP flows' throughput drops to half when a new flow is created
+- the pre-existing TCP flows' throughput drops to half when a new flow is created. The new TCP flow will share the capacity with the pre-existing one.
 
 ### Explain the mechanisms of TCP which contribute to this behaviour. 
 
@@ -100,8 +101,8 @@
 
 ## Question 1: How do you expect the TCP flow and the UDP flow to behave if the capacity of the link is 5 Mbps ? 
 
-- UDP will reach it max speed which is 4M
-- TCP will use the remained capacity which is 1M
+- UDP will reach it max speed which is about 4M
+- TCP will use the remained capacity which is about 1M
 
 ## Question 2: Why does one flow achieve higher throughput than the other? Try to explain what mechanisms force the two flows to stabilise to the observed throughput. 
 - because UDP does not have a flow control, it will always try to deleivery files in its maximun speed.
