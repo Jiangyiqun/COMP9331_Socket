@@ -37,8 +37,6 @@
 - traffic from 2 to 5 takes two route, which are 2->1->4->5 and 2->3-5
 - the line uncommented allowed take multi-route when the cost are equal
 
-## Exercise 2: Setting up NS2 simulation for measuring TCP throughput 
-
 ## Exercise 3: Understanding IP Fragmentation
 
 ## Question 1: 
