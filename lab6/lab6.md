@@ -38,3 +38,36 @@
 - the line uncommented allowed take multi-route when the cost are equal
 
 ## Exercise 2: Setting up NS2 simulation for measuring TCP throughput 
+
+## Exercise 3: Understanding IP Fragmentation
+
+## Question 1: 
+
+### Which data size has caused fragmentation and why?
+- 2000 bytes and 3500 bytes
+- because the MTU is 1500 bytes
+  
+### Which host/router has fragmented the original datagram?
+- the source host
+  
+### How many fragments have been created when data size is specified as 2000?
+- 2
+  
+## Question 2: Did the reply from the destination 8.8.8.8. for 3500-byte data size also get fragmented? Why and why not?
+- yes
+- three fragments can be seen in wireshark
+  
+## Question 3: Give the ID, length, flag and offset values for all the fragments of the first packet sent by 192.168.1.103 with data size of 3500 bytes?
+
+ID | length     | flag | offset
+---|------------|------|--------
+39 | 1480 bytes | MF=1 | 0
+40 | 1480 bytes | MF=1 | 185
+41 | 548 bytes  | MF=1 | 370
+
+## Question 4: Has fragmentation of fragments occurred when data of size 3500 bytes has been used? Why and why not?
+- No
+- it has 3 fragments, each with less than 1480 bytes
+  
+## Question 5: What will happen if for our example one fragment of the original datagram from 192.168.1.103 is lost? 
+- it will drop the whole package
