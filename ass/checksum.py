@@ -6,6 +6,15 @@
 
 
 class Checksum():
+    # Usage: 
+    # checksum = checksumcalculate_checksum(msg)
+    #   msg: bytes type
+    #   checksum: bytes type
+    # 
+    # bool = validate_checksum(msg)
+    #   msg: bytes type
+    #   bool: True or False
+    #
     @staticmethod
     def sum_up(msg):
         word_sum = 0

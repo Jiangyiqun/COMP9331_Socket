@@ -8,6 +8,10 @@ import argparse
 from checksum import Checksum
 
 
+ACK_SIZE = 1
+READ_SIZE = 512
+
+
 def get_args ():
     parser = argparse.ArgumentParser()
     parser.add_argument('receiver_host_ip', type=str)
@@ -28,10 +32,9 @@ def get_args ():
     return args
 
 
-class Receiver():
-    def __init__(self, receiver_addr, buffer_size):
+class Sender():
+    def __init__(self, receiver_addr):
         self.receiver_addr = receiver_addr
-        self.buffer_size = buffer_size
         self.package = bytes()
         self.payload = bytes()
         self.checksum = bytes()
@@ -51,7 +54,7 @@ class Receiver():
     def send_good_package(self):
         while(True):
             self.send_package()
-            pkg, addr = self.sock.recvfrom(self.buffer_size)
+            pkg, addr = self.sock.recvfrom(ACK_SIZE)
             ack = pkg[0]
             if (ack == 1):
                 print("received ACK from: ", addr)
@@ -59,22 +62,25 @@ class Receiver():
             else:
                 print("received NAK from: ", addr)
                 continue
+    def rdt_send(self, data):
+        self.make_package(data)
+        self.send_good_package()
+
 
 
 if __name__ == '__main__':
+    # get the arguments Sender
     args = get_args()
     host = "0.0.0.0"
-    buffer_size = 512
     receiver_addr = (args.receiver_host_ip, args.receiver_port)
-    instance = Receiver(receiver_addr, buffer_size)
-
-
+    # create instance of Sender
+    instance = Sender(receiver_addr)
+    # read and send file
     with open(args.file, 'rb') as fd:
-        data = fd.read(instance.buffer_size)
-        instance.make_package(data)
+        data = fd.read(READ_SIZE)
         while (data):
-            instance.send_good_package()
-            data = fd.read(instance.buffer_size)
-            instance.make_package(data)
+            instance.rdt_send(data)
+            data = fd.read(READ_SIZE)
+    # close
     instance.close()
     print("\nSend", args.file ,"to", instance.receiver_addr)
