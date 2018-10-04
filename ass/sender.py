@@ -33,17 +33,31 @@ def get_args ():
 
 
 class Sender():
+    # sent package:
+    #   header:
+    #       sequence: 1 byte
+    #       checksum: 2 bytes
+    #   payload
+    #
+    # ack package:
+    #   sequence: 1 byte
+    #
     def __init__(self, receiver_addr):
         self.receiver_addr = receiver_addr
         self.package = bytes()
-        self.payload = bytes()
+        self.sequence = bytes([0])
         self.checksum = bytes()
+        self.payload = bytes()
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        print("Socket created!\n")
+        print("Sender is ready\n")
     def make_package(self, payload):
         self.payload = payload
-        self.checksum = Checksum.calculate_checksum(payload)
-        self.package = bytes(list(self.checksum)) + self.payload
+        self.checksum = Checksum.calculate_checksum(\
+                        self.sequence\
+                        + self.payload)
+        self.package = self.sequence\
+                       + self.checksum\
+                       + self.payload
     def close(self):
         self.sock.close()
     def send_package(self):
@@ -51,20 +65,29 @@ class Sender():
         print("send package with checksum: ",
                 self.checksum[0], self.checksum[1])
         return sent_bytes
-    def send_good_package(self):
-        while(True):
-            self.send_package()
-            pkg, addr = self.sock.recvfrom(ACK_SIZE)
-            ack = pkg[0]
-            if (ack == 1):
-                print("received ACK from: ", addr)
-                break
-            else:
-                print("received NAK from: ", addr)
-                continue
-    def rdt_send(self, data):
+    def increase_sequence(self):
+        if (self.sequence == bytes([0])):
+            self.sequence == bytes([1])
+        elif (self.sequence == bytes([1])):
+            self.sequence == bytes([0])
+        else:
+            raise "Bad sequence number!"
+    def send(self, data):
         self.make_package(data)
-        self.send_good_package()
+        while(True):
+            # send and wait
+            self.send_package()
+            ack_package, ack_address = self.sock.recvfrom(ACK_SIZE)
+            # determine whether the return is currupted
+            ack_sequence = ack_package[0]
+            if (ack_sequence == self.sequence[0]):
+                # not currupted, increase sequence number
+                self.increase_sequence()
+                print("received package: ", self.sequence[0])
+                break
+            else:   # currupted, resend package
+                print("resend package: ", self.sequence[0])
+                continue
 
 
 
@@ -79,8 +102,9 @@ if __name__ == '__main__':
     with open(args.file, 'rb') as fd:
         data = fd.read(READ_SIZE)
         while (data):
-            instance.rdt_send(data)
+            instance.send(data)
             data = fd.read(READ_SIZE)
+
     # close
     instance.close()
     print("\nSend", args.file ,"to", instance.receiver_addr)
