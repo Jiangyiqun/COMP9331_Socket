@@ -16,10 +16,9 @@ def get_args ():
 
 class Receiver():
     # sent package:
-    #   header:
-    #       sequence: 1 byte
-    #       checksum: 2 bytes
-    #   payload
+    #   sequence: 1 byte
+    #   payload: more bytes
+    #   checksum: 2 bytes
     #
     # ack package:
     #   sequence: 1 byte
@@ -30,7 +29,7 @@ class Receiver():
         self.sender_addr = ""
         self.package = bytes()
         self.sequence = bytes()
-        self.last_sequence = bytes()
+        self.last_sequence = bytes([1])
         self.checksum = bytes()
         self.payload = bytes()
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -39,8 +38,8 @@ class Receiver():
     def receive_package(self):
         self.package, self.sender_addr = self.sock.recvfrom(buffer_size)
         self.sequence = self.package[0]
-        self.checksum = (self.package[1], self.package[2])
-        self.payload = self.package[3:]
+        self.payload = self.package[3:-3]
+        self.checksum = (self.package[-2], self.package[-1])
     def send_ACK(self):
         self.sock.sendto(self.last_sequence, self.sender_addr)
     # def send_NAK(self):
@@ -58,19 +57,27 @@ class Receiver():
     #             print("send NAK to: ", self.sender_addr)
     #             self.send_NAK()
     def receive(self):
-        while(True):
+        # while(True):
             # receive extract of the package
-            self.receive_package()
-            # not currupted, update last sequence number
-            if (Checksum.validate_checksum(self.package)\
-                and (self.sequence != self.last_sequence[0])):
+        self.receive_package()
+        if (Checksum.validate_checksum(self.package)):
+            if (self.sequence != self.last_sequence[0]):
+                # not corrupted, new package
+                # update last sequence number & return
                 self.last_sequence = bytes([self.sequence])
-                print("send ACK to: ", self.sender_addr)
+                print("correct package:", self.last_sequence[0])
                 self.send_ACK()
-                break
-            else:   # currupted
-                print("send NAK to: ", self.sender_addr)
+                return
+            else:
+                # not corrupted, but duplicated package
+                print("duplicate package:", self.last_sequence[0])
                 self.send_ACK()
+        else:   
+            # package currupted
+            print("corrupted package:",\
+                    self.last_sequence[0],\
+                    self.checksum)
+            self.send_ACK()
 
 
 if __name__ == '__main__':
@@ -84,13 +91,13 @@ if __name__ == '__main__':
 
     # receiver and write
     instance.receive()
-    with open(args.file_r, 'wb') as fd:
-        try:
-            while(instance.package):
-                fd.write(instance.payload)
-                instance.sock.settimeout(2)
-                instance.receive()
-        except socket.timeout:
-            # close socket
-            instance.close()
-    print("\nSave file", args.file_r, "from", instance.sender_addr)
+    # with open(args.file_r, 'wb') as fd:
+    #     try:
+    #         while(instance.package):
+    #             fd.write(instance.payload)
+    #             instance.sock.settimeout(2)
+    #             instance.receive()
+    #     except socket.timeout:
+    #         # close socket
+    #         instance.close()
+    # print("\nSave file", args.file_r, "from", instance.sender_addr)

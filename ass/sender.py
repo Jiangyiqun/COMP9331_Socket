@@ -34,10 +34,9 @@ def get_args ():
 
 class Sender():
     # sent package:
-    #   header:
-    #       sequence: 1 byte
-    #       checksum: 2 bytes
-    #   payload
+    #   sequence: 2 byte
+    #   payload: more bytes
+    #   checksum: 2 bytes
     #
     # ack package:
     #   sequence: 1 byte
@@ -45,7 +44,7 @@ class Sender():
     def __init__(self, receiver_addr):
         self.receiver_addr = receiver_addr
         self.package = bytes()
-        self.sequence = bytes([0])
+        self.sequence = bytes([0, 0])
         self.checksum = bytes()
         self.payload = bytes()
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -56,8 +55,9 @@ class Sender():
                         self.sequence\
                         + self.payload)
         self.package = self.sequence\
-                       + self.checksum\
-                       + self.payload
+                       + self.payload\
+                       + self.checksum
+        Checksum.validate_checksum(self.package)
     def close(self):
         self.sock.close()
     def send_package(self):
