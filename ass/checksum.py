@@ -58,8 +58,6 @@ class Checksum():
 
     @staticmethod
     def calculate_checksum(msg):
-        print(msg)
-        print(len(msg))
         word_sum = Checksum.sum_up(msg)
         # print("word_sum =", hex(word_sum))
         folded_word = Checksum.fold_up(word_sum)
@@ -67,14 +65,13 @@ class Checksum():
         complement = Checksum.ones_complement(folded_word)
         # print("complement =", hex(complement))
         checksum = Checksum.word_to_bytes(complement)
-        print(checksum)
+        # print(checksum)
         return checksum
 
     @staticmethod
     def validate_checksum(msg):
         word_sum = Checksum.sum_up(msg)
         folded_word = Checksum.fold_up(word_sum)
-        print(hex(folded_word))
         if (folded_word == 0xFFFF):
             return True
         else:

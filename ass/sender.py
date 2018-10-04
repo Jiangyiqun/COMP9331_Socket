@@ -1,5 +1,3 @@
-#!/usr/bin/python3
-#/home/z5129432/anaconda3/bin/python
 # sender receiver_host_ip receiver_port file.pdf MWS MSS gamma
 #        pDrop pDuplicate pCorrupt pOrder maxOrder pDelay maxDelay seed
 
@@ -8,7 +6,7 @@ import argparse
 from checksum import Checksum
 
 
-ACK_SIZE = 1
+ACK_SIZE = 2
 READ_SIZE = 512
 
 
@@ -33,14 +31,6 @@ def get_args ():
 
 
 class Sender():
-    # sent package:
-    #   sequence: 2 byte
-    #   payload: more bytes
-    #   checksum: 2 bytes
-    #
-    # ack package:
-    #   sequence: 1 byte
-    #
     def __init__(self, receiver_addr):
         self.receiver_addr = receiver_addr
         self.package = bytes()
@@ -55,21 +45,20 @@ class Sender():
                         self.sequence\
                         + self.payload)
         self.package = self.sequence\
-                       + self.payload\
-                       + self.checksum
-        Checksum.validate_checksum(self.package)
+                       + self.checksum\
+                       + self.payload
     def close(self):
         self.sock.close()
     def send_package(self):
         sent_bytes = self.sock.sendto(self.package, receiver_addr)
-        print("send package with checksum: ",
-                self.checksum[0], self.checksum[1])
+        print("send package", self.sequence,
+                "with checksum: ", self.checksum[0], self.checksum[1])
         return sent_bytes
-    def increase_sequence(self):
-        if (self.sequence == bytes([0])):
-            self.sequence == bytes([1])
-        elif (self.sequence == bytes([1])):
-            self.sequence == bytes([0])
+    def flip_sequence(self):
+        if (self.sequence == bytes([0, 0])):
+            self.sequence = bytes([0, 1])
+        elif (self.sequence == bytes([0, 1])):
+            self.sequence = bytes([0, 0])
         else:
             raise "Bad sequence number!"
     def send(self, data):
@@ -79,14 +68,14 @@ class Sender():
             self.send_package()
             ack_package, ack_address = self.sock.recvfrom(ACK_SIZE)
             # determine whether the return is currupted
-            ack_sequence = ack_package[0]
-            if (ack_sequence == self.sequence[0]):
+            ack_sequence = ack_package[0:2]
+            if (ack_sequence == self.sequence):
                 # not currupted, increase sequence number
-                self.increase_sequence()
-                print("received package: ", self.sequence[0])
+                print("package", self.sequence, "send OK!")
+                self.flip_sequence()
                 break
             else:   # currupted, resend package
-                print("resend package: ", self.sequence[0])
+                print("package", self.sequence, "need resent!")
                 continue
 
 
