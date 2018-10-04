@@ -1,10 +1,9 @@
-#!/home/z5129432/anaconda3/bin/python
+#!/usr/bin/python3
+#/home/z5129432/anaconda3/bin/python
 # receiver receiver_port file_r.pdf
 import socket
 import argparse
 import select
-
-
 
 
 def get_args ():
@@ -13,13 +12,6 @@ def get_args ():
     parser.add_argument('file_r', type=str)
     args = parser.parse_args()
     return args
-
-
-def bind_socket(address):
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.bind(address)
-    print("Receiver is listening on:", address)
-    return sock
 
 
 def get_checksum(msg):
@@ -44,44 +36,67 @@ def get_checksum(msg):
     high = s // 256
     low = s % 256
     return high, low
-
-
-def process_checksum(data):
-    data_checksum = (data[0], data[1])
-    data_payload = data[2:]
-    real_checksum = get_checksum(data_payload)
-    print("real_checksum = ", real_checksum)
-    print("data_checksum = ", data_checksum)
-    if (real_checksum == data_checksum):
-        return data_payload
-    else:
-        return False
      
+
+class Receiver():
+    def __init__(self, receiver_addr, buffer_size):
+        self.receiver_addr = receiver_addr
+        self.buffer_size = buffer_size
+        self.sender_addr = ""
+        self.package = bytes()
+        self.payload = bytes()
+        self.checksum = bytes()
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.sock.bind(receiver_addr)
+        print("Receiver is listening on:", receiver_addr, "\n")
+    def receive_package(self):
+        self.package, self.sender_addr = self.sock.recvfrom(buffer_size)
+        self.payload = self.package[2:]
+        self.checksum = (self.package[0], self.package[1])
+    def checksum_matches(self):
+        payload_checksum = get_checksum(instance.payload)
+        print("receive package with checksum: ", payload_checksum)
+        if (payload_checksum == instance.checksum):
+            return True
+        else:
+            print("receive package withpayload checksum: ",
+                    payload_checksum,
+                    "header checksum: ",
+                    instance.checksum)
+            return False
+    def send_ACK(self):
+        self.sock.sendto(bytes([1]), self.sender_addr)
+    def send_NAK(self):
+        self.sock.sendto(bytes([0]), self.sender_addr)
+    def close(self):
+        self.sock.close()
+    def receive_good_package(self):
+        while(True):
+            self.receive_package()
+            if self.checksum_matches():
+                print("send ACK to: ", self.sender_addr)
+                self.send_ACK()
+                break
+            else:
+                print("send NAK to: ", self.sender_addr)
+                self.send_NAK()
 
 
 
 if __name__ == '__main__':
+    args = get_args()
     host = "0.0.0.0"
     buffer_size = 1024
-    args = get_args()
-    address = (host, args.receiver_port)
-    sock = bind_socket(address)
-    
-    data, addr = sock.recvfrom(buffer_size)
-    data_payload = process_checksum(data)
-    if (not data_payload):
-        print("data is corrupted!\n")
-        exit(1)
+    receiver_addr = (host, args.receiver_port)
+    instance = Receiver(receiver_addr, buffer_size)
+
+    instance.receive_good_package()
     with open(args.file_r, 'wb') as fd:
         try:
-            while(data):
-                fd.write(data)
-                sock.settimeout(2)
-                data,addr = sock.recvfrom(buffer_size)
-                data_payload = process_checksum(data)
-                if (not data_payload):
-                    print("data is corrupted!\n")
-                    exit(1)
+            while(instance.package):
+                fd.write(instance.payload)
+                instance.sock.settimeout(2)
+                instance.receive_good_package()
         except socket.timeout:
-            sock.close()
-            print("Received file from", addr)
+            instance.close()
+            print("\nSave file", args.file_r, "from", instance.sender_addr)
