@@ -71,11 +71,80 @@ class Checksum():
             return False
 
 
+
+class Package():
+    def __init__(self, package=None):
+        # initialize the segment
+        self.sequence = bytes([0])
+        self.acknowledge = bytes([0])
+        self.flag = bytes([0])
+        self.window = bytes([0])
+        self.checksum = bytes([0, 0])
+        # the data flow
+        self.header = bytes()
+        self.payload = bytes()
+        self.package = package
+        # the flags
+        self.ack = False
+        self.syn = False
+        self.fin = False
+        # call the parsers
+        if (package):
+            self.parse_package()
+            self.parse_flag()
+
+
+    def parse_package(self):
+        self.sequence = self.package[0:1]
+        self.acknowledge = self.package[1:2]
+        self.flag = self.package[2:3]
+        self.window = self.package[3:4]
+        self.checksum = self.package[4:6]
+        self.header = self.package[0:6]
+        self.payload = self.package[6:]
+
+
+    def parse_flag(self):
+        if (self.flag[0] & (1<<4)):
+            self.ack = True
+        else:
+            self.ack = False
+
+        if (self.flag[0] & (1<<1)):
+            self.syn = True
+        else:
+            self.syn = False
+
+        if (self.flag[0] & (1<<0)):
+            self.fin = True
+        else:
+            self.fin = False
+
+
+    def show(self):
+        print("sequence: ", self.sequence[0])
+        print("acknowledge: ", self.acknowledge[0])
+        print("flag: ", self.flag[0])
+        print("window: ", self.window[0])
+        print("checksum: ", self.checksum[0], self.checksum[1])
+        print("length of header: ", len(self.header))
+        print("length of payload: ", len(self.payload))
+        print("length of package: ", len(self.package))
+        print("ack: ", self.ack)
+        print("syn: ", self.syn)
+        print("fin: ", self.fin)
+
+
 if __name__ == '__main__':
+    # test checksum
     # msg = bytes.fromhex('4500003044224000800600008c7c19acae241e2b')
-    msg = b'\x00%PDF-1.3\r\n%\xe2\xe3\xcf\xd3\r\n\r\n1 0 obj\r\n<<\r\n/Type /Catalog\r\n/Outlines 2 0 R\r\n/Pages 3 0 R\r\n>>\r\nendobj\r\n\r\n2 0 obj\r\n<<\r\n/Type /Outlines\r\n/Count 0\r\n>>\r\nendobj\r\n\r\n3 0 obj\r\n<<\r\n/Type /Pages\r\n/Count 2\r\n/Kids [ 4 0 R 6 0 R ] \r\n>>\r\nendobj\r\n\r\n4 0 obj\r\n<<\r\n/Type /Page\r\n/Parent 3 0 R\r\n/Resources <<\r\n/Font <<\r\n/F1 9 0 R \r\n>>\r\n/ProcSet 8 0 R\r\n>>\r\n/MediaBox [0 0 612.0000 792.0000]\r\n/Contents 5 0 R\r\n>>\r\nendobj\r\n\r\n5 0 obj\r\n<</Length 1074 >>\r\nstream\r\n2 J\r\nBT\r\n0 0 0 rg\r\n/F1 0027 Tf\r\n57.3750 722.2800 Td\r\n( A Simple PDF File ) Tj\r\nET\r\nBT'
-    checksum = Checksum.calculate_checksum(msg)
+    # checksum = Checksum.calculate_checksum(msg)
     # print("checksum =", checksum[0], checksum[1])
-    msg_with_checksum = msg + checksum
-    if (Checksum.validate_checksum(msg_with_checksum)):
-        print("checksum is valid!")
+    # msg_with_checksum = msg + checksum
+    # if (Checksum.validate_checksum(msg_with_checksum)):
+    #     print("checksum is valid!")
+
+    # test package
+    data = b'123456abcdef'
+    package = Package(data)
+    package.show()

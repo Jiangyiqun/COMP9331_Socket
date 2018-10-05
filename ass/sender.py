@@ -3,11 +3,13 @@
 
 import socket
 import argparse
-from checksum import Checksum
+from scp import Checksum, Package
 
 
-ACK_SIZE = 2
+
+ACK_SIZE = 512
 READ_SIZE = 512
+
 
 
 def get_args ():
@@ -30,54 +32,85 @@ def get_args ():
     return args
 
 
+
+
 class Sender():
     def __init__(self, receiver_addr):
         self.receiver_addr = receiver_addr
-        self.package = bytes()
-        self.sequence = bytes([0, 0])
-        self.checksum = bytes()
+        # initialize the segment to be sent
+        self.sequence = bytes([0])
+        self.acknowledge = bytes([0])
+        self.flag = bytes([0])
+        self.window = bytes([0])
+        self.checksum = bytes([0, 0])
+        # the data flow to be sent
+        self.header = bytes()
         self.payload = bytes()
+        self.package = bytes()
+        # create the socket
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         print("Sender is ready\n")
-    def make_package(self, payload):
-        self.payload = payload
+
+
+    def make_package(self, data):
+        self.payload = data
+        header_without_checksum = self.sequence\
+                                + self.acknowledge\
+                                + self.flag\
+                                + self.window
         self.checksum = Checksum.calculate_checksum(\
-                        self.sequence\
+                        header_without_checksum\
                         + self.payload)
-        self.package = self.sequence\
-                       + self.checksum\
-                       + self.payload
-    def close(self):
-        self.sock.close()
+        self.header = header_without_checksum + self.checksum
+        self.package = self.header + self.payload
+
+
+
     def send_package(self):
         sent_bytes = self.sock.sendto(self.package, receiver_addr)
-        print("send package", self.sequence,
-                "with checksum: ", self.checksum[0], self.checksum[1])
+        print("send package", self.sequence[0],
+                "with checksum", self.checksum[0], self.checksum[1])
         return sent_bytes
+
+
+    def receive_package(self):
+        package, address = self.sock.recvfrom(ACK_SIZE)
+        receiver = Package(package)
+        return receiver
+
+
     def flip_sequence(self):
-        if (self.sequence == bytes([0, 0])):
-            self.sequence = bytes([0, 1])
-        elif (self.sequence == bytes([0, 1])):
-            self.sequence = bytes([0, 0])
+        if (self.sequence == bytes([0])):
+            self.sequence = bytes([1])
+        elif (self.sequence == bytes([1])):
+            self.sequence = bytes([0])
         else:
             raise "Bad sequence number!"
+
+
     def send(self, data):
         self.make_package(data)
         while(True):
             # send and wait
             self.send_package()
-            ack_package, ack_address = self.sock.recvfrom(ACK_SIZE)
+            receiver = self.receive_package()
+
             # determine whether the return is currupted
-            ack_sequence = ack_package[0:2]
-            if (ack_sequence == self.sequence):
+            if (receiver.acknowledge == self.sequence):
                 # not currupted, increase sequence number
-                print("package", self.sequence, "send OK!")
+                print("receive package", receiver.acknowledge[0],\
+                        "send next!")
                 self.flip_sequence()
                 break
             else:   # currupted, resend package
-                print("package", self.sequence, "need resent!")
-                continue
+                print("receive package", receiver.acknowledge[0],\
+                        "need resend!")
+                # continue
+                break
 
+                
+    def close(self):
+        self.sock.close()
 
 
 if __name__ == '__main__':
