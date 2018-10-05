@@ -1,10 +1,3 @@
-#!/usr/bin/python3
-# acknowlegement:
-#   the test cases comes from
-#   http://www.roman10.net/2011/11/27/how-to-calculate-iptcpudp-checksumpart-1-theory/
-#
-
-
 class Checksum():
     # Usage: 
     # checksum = checksumcalculate_checksum(msg)

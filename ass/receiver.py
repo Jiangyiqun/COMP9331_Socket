@@ -44,7 +44,7 @@ class Receiver():
     def receive(self, timeout=None):
         # Usage: not_finish = receive(timeout)
         #   
-        self.sock.settimeout(timeout)
+        # self.sock.settimeout(timeout)
         try:
             while(True):
                 # receive extract of the package
