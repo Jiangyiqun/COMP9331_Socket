@@ -39,17 +39,30 @@ class Receiver():
         print("send package", self.receiver_pkg.acknowledge[0])
         return sent_bytes
 
-    def receive(self, timeout=None):
+    def receive(self):
         # Usage: not_finish = receive(timeout)
         #   
-        self.sock.settimeout(timeout)
         # finite state machine
         while(True):
             # stop and wait to receive from the sender
-            try:
+            self.receive_package()
+            # when received a fin, then ack on it
+            # wait untill a not fin is received
+            while (self.sender_pkg.fin):
+                # send fin & ack and wait
+                self.receiver_pkg.fin = True
+                self.receiver_pkg.ack = True
+                self.receiver_pkg.make_package()
+                self.send_package()
                 self.receive_package()
-            except socket.timeout:
+            # there must not have a fin bit
+            if (self.sender_pkg.ack):
+                self.receiver_pkg.fin = False
+                self.receiver_pkg.ack = False
+                self.sock.close()
+                print("Connection terminated!")
                 return False
+            # else this package then goes to next step
             # check the package and send ack
             if (self.sender_pkg.validate_package()):
                 if (self.last_sequence != self.sender_pkg.sequence):
@@ -98,10 +111,6 @@ class Receiver():
                     return
 
 
-    def close(self):
-        self.sock.close()
-
-
 if __name__ == '__main__':
     # get the arguments Receiver
     args = get_args()
@@ -119,8 +128,6 @@ if __name__ == '__main__':
     with open(args.file_r, 'wb') as fd:
         while(not_finish):
             fd.write(instance.sender_pkg.payload)
-            not_finish = instance.receive(1)
+            not_finish = instance.receive()
     
-    # close
-    instance.close()
     print("\nSave file", args.file_r, "from", instance.sender_addr)

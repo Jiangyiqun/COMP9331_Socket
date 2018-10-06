@@ -9,7 +9,7 @@ from scp import ScpPackage
 
 ACK_SIZE = 512
 READ_SIZE = 512
-
+TIME_OUT = 1
 
 
 def get_args ():
@@ -62,10 +62,17 @@ class Sender():
     def send(self, data):
         self.sender_pkg.payload = data
         self.sender_pkg.make_package() 
-        while(True):
+        while(True):    # resend untill receiving correct ack
             # send and wait
-            self.send_package()
-            self.receive_package()
+            while(True):
+                self.send_package()
+                self.sock.settimeout(TIME_OUT)
+                try:
+                    self.receive_package()
+                except socket.timeout:
+                    continue    # resend when timeout
+                self.sock.settimeout(None)
+                break   # go on when received a package on time
 
             # finite state machine
             if (self.receiver_pkg.acknowledge ==\
@@ -105,9 +112,26 @@ class Sender():
                 return
 
 
-                
-    def close(self):
-        self.sock.close()
+    def finish(self):
+        while(True):
+            # send fin and wait
+            self.sender_pkg.fin = True
+            self.sender_pkg.make_package()
+            self.send_package()
+            self.receive_package()
+            # receive fin & ack
+            if (self.receiver_pkg.fin and self.receiver_pkg.ack):
+                # send ack
+                self.sender_pkg.fin = False
+                self.sender_pkg.ack = True
+                self.sender_pkg.make_package()
+                self.send_package()
+                # connection terminated
+                self.sender_pkg.syn = False
+                self.sender_pkg.ack = False
+                self.sock.close()
+                print("Connection terminated!")
+                return
 
 
 if __name__ == '__main__':
@@ -124,7 +148,7 @@ if __name__ == '__main__':
         while (data):
             instance.send(data)
             data = fd.read(READ_SIZE)
-
-    # close
-    instance.close()
+    
+    # terminate connection
+    instance.finish()
     print("\nSend", args.file ,"to", instance.receiver_addr)
