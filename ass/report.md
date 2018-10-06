@@ -11,3 +11,10 @@ No| segment     | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7
 4 | checksum    |   |   |   |   |   |   |   |   
 5 | checksum    |   |   |   |   |   |   |   |   
 . | payload     |   |   |   |   |   |   |   |   
+
+
+## connect
+
+Receiver <--- Sender         SYN
+Receiver ---> Sender     SYN ACK 
+Receiver <--- Sender     ACK    

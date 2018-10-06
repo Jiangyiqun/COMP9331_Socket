@@ -3,7 +3,7 @@
 
 import socket
 import argparse
-from scp import Checksum, Package
+from scp import ScpPackage
 
 
 
@@ -37,76 +37,73 @@ def get_args ():
 class Sender():
     def __init__(self, receiver_addr):
         self.receiver_addr = receiver_addr
-        # initialize the segment to be sent
-        self.sequence = bytes([0])
-        self.acknowledge = bytes([0])
-        self.flag = bytes([0])
-        self.window = bytes([0])
-        self.checksum = bytes([0, 0])
-        # the data flow to be sent
-        self.header = bytes()
-        self.payload = bytes()
-        self.package = bytes()
+        # create scpPackage abstraction
+        self.sender_pkg = ScpPackage()
+        self.receiver_pkg = ScpPackage()
         # create the socket
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         print("Sender is ready\n")
 
 
-    def make_package(self, data):
-        self.payload = data
-        header_without_checksum = self.sequence\
-                                + self.acknowledge\
-                                + self.flag\
-                                + self.window
-        self.checksum = Checksum.calculate_checksum(\
-                        header_without_checksum\
-                        + self.payload)
-        self.header = header_without_checksum + self.checksum
-        self.package = self.header + self.payload
-
-
-
     def send_package(self):
-        sent_bytes = self.sock.sendto(self.package, receiver_addr)
-        print("send package", self.sequence[0],
-                "with checksum", self.checksum[0], self.checksum[1])
+        sent_bytes = self.sock.sendto(\
+                self.sender_pkg.package, receiver_addr)
+        print("send package", self.sender_pkg.sequence[0],\
+                "with checksum",self.sender_pkg.checksum_str())
         return sent_bytes
 
 
     def receive_package(self):
-        package, address = self.sock.recvfrom(ACK_SIZE)
-        receiver = Package(package)
-        return receiver
-
-
-    def flip_sequence(self):
-        if (self.sequence == bytes([0])):
-            self.sequence = bytes([1])
-        elif (self.sequence == bytes([1])):
-            self.sequence = bytes([0])
-        else:
-            raise "Bad sequence number!"
+        package, receiver_address = self.sock.recvfrom(ACK_SIZE)
+        self.receiver_pkg.extract_package(package)
+        return receiver_address
 
 
     def send(self, data):
-        self.make_package(data)
+        self.sender_pkg.payload = data
+        self.sender_pkg.make_package() 
         while(True):
             # send and wait
             self.send_package()
-            receiver = self.receive_package()
+            self.receive_package()
 
-            # determine whether the return is currupted
-            if (receiver.acknowledge == self.sequence):
-                # not currupted, increase sequence number
-                print("receive package", receiver.acknowledge[0],\
+            # finite state machine
+            if (self.receiver_pkg.acknowledge ==\
+                    self.sender_pkg.sequence):
+                # not currupted, flip sequence number
+                self.sender_pkg.flip_sequence()
+                print("receive package",\
+                        self.receiver_pkg.acknowledge[0],\
                         "send next!")
-                self.flip_sequence()
                 break
-            else:   # currupted, resend package
-                print("receive package", receiver.acknowledge[0],\
+            else:   
+                # currupted, resend package
+                print("receive package",\
+                        self.receiver_pkg.acknowledge[0],\
                         "need resend!")
-                # continue
-                break
+                continue
+                # break
+
+    def connect(self):
+        while(True):
+            # send syn and wait
+            self.sender_pkg.syn = True
+            self.sender_pkg.make_package()
+            self.send_package()
+            self.receive_package()
+            # receive syn & ack
+            if (self.receiver_pkg.syn and self.receiver_pkg.ack):
+                # send ack
+                self.sender_pkg.syn = False
+                self.sender_pkg.ack = True
+                self.sender_pkg.make_package()
+                self.send_package()
+                # connection estabilished
+                self.sender_pkg.syn = False
+                self.sender_pkg.ack = False
+                print("Connection estabilished!")
+                return
+
 
                 
     def close(self):
@@ -120,6 +117,7 @@ if __name__ == '__main__':
     receiver_addr = (args.receiver_host_ip, args.receiver_port)
     # create instance of Sender
     instance = Sender(receiver_addr)
+    instance.connect()
     # read and send file
     with open(args.file, 'rb') as fd:
         data = fd.read(READ_SIZE)

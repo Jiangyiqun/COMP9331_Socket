@@ -72,7 +72,8 @@ class Checksum():
 
 
 
-class Package():
+class ScpPackage():
+    # scp package abstraction
     def __init__(self, package=None):
         # initialize the segment
         self.sequence = bytes([0])
@@ -81,20 +82,24 @@ class Package():
         self.window = bytes([0])
         self.checksum = bytes([0, 0])
         # the data flow
-        self.header = bytes()
+        self.header = self.sequence\
+                    + self.acknowledge\
+                    + self.flag\
+                    + self.window\
+                    + self.checksum
         self.payload = bytes()
-        self.package = package
+        self.package = self.header + self.payload
         # the flags
         self.ack = False
         self.syn = False
         self.fin = False
-        # call the parsers
+        # extract from package
         if (package):
-            self.parse_package()
-            self.parse_flag()
+            self.extract_package(package)
+            
 
-
-    def parse_package(self):
+    def extract_package(self, package):
+        self.package = package
         self.sequence = self.package[0:1]
         self.acknowledge = self.package[1:2]
         self.flag = self.package[2:3]
@@ -102,9 +107,10 @@ class Package():
         self.checksum = self.package[4:6]
         self.header = self.package[0:6]
         self.payload = self.package[6:]
+        self.extract_flag()
 
 
-    def parse_flag(self):
+    def extract_flag(self):
         if (self.flag[0] & (1<<4)):
             self.ack = True
         else:
@@ -121,7 +127,44 @@ class Package():
             self.fin = False
 
 
-    def show(self):
+    def make_flag(self):
+        flag = 0
+        if (self.ack):
+            flag |= (1<<4)
+        if (self.syn):
+            flag |= (1<<1)
+        if (self.fin):
+            flag |= (1<<0)
+        self.flag = bytes([flag])
+
+
+
+    def make_package(self):
+        self.make_flag()
+        header_without_checksum = self.sequence\
+                                + self.acknowledge\
+                                + self.flag\
+                                + self.window
+        self.checksum = Checksum.calculate_checksum(\
+                        header_without_checksum\
+                        + self.payload)
+        self.header = header_without_checksum + self.checksum
+        self.package = self.header + self.payload
+
+
+    def validate_package(self):
+        return Checksum.validate_checksum(self.package)
+
+    def flip_sequence(self):
+        if (self.sequence == bytes([0])):
+            self.sequence = bytes([1])
+        elif (self.sequence == bytes([1])):
+            self.sequence = bytes([0])
+        else:
+            raise "Bad sequence number!"
+
+
+    def print_package(self):
         print("sequence: ", self.sequence[0])
         print("acknowledge: ", self.acknowledge[0])
         print("flag: ", self.flag[0])
@@ -135,6 +178,10 @@ class Package():
         print("fin: ", self.fin)
 
 
+    def checksum_str(self):
+        return str(self.checksum[0]) + " " + str(self.checksum[1])
+
+
 if __name__ == '__main__':
     # test checksum
     # msg = bytes.fromhex('4500003044224000800600008c7c19acae241e2b')
@@ -146,5 +193,9 @@ if __name__ == '__main__':
 
     # test package
     data = b'123456abcdef'
-    package = Package(data)
-    package.show()
+    package = ScpPackage(data)
+    package.print_package()
+    print(package.checksum_str())
+    package.fin = False
+    package.make_flag()
+    package.print_package()
