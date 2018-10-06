@@ -3,7 +3,7 @@
 
 import socket
 import argparse
-from scp import ScpPackage
+from scp import ScpPackage, ScpLogger
 
 
 

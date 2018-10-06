@@ -1,3 +1,5 @@
+import time
+
 class Checksum():
     # Usage: 
     # checksum = checksumcalculate_checksum(msg)
@@ -96,7 +98,6 @@ class ScpPackage():
         # extract from package
         if (package):
             self.extract_package(package)
-            
 
     def extract_package(self, package):
         self.package = package
@@ -108,7 +109,6 @@ class ScpPackage():
         self.header = self.package[0:6]
         self.payload = self.package[6:]
         self.extract_flag()
-
 
     def extract_flag(self):
         if (self.flag[0] & (1<<4)):
@@ -126,7 +126,6 @@ class ScpPackage():
         else:
             self.fin = False
 
-
     def make_flag(self):
         flag = 0
         if (self.ack):
@@ -136,8 +135,6 @@ class ScpPackage():
         if (self.fin):
             flag |= (1<<0)
         self.flag = bytes([flag])
-
-
 
     def make_package(self):
         self.make_flag()
@@ -151,7 +148,6 @@ class ScpPackage():
         self.header = header_without_checksum + self.checksum
         self.package = self.header + self.payload
 
-
     def validate_package(self):
         return Checksum.validate_checksum(self.package)
 
@@ -162,7 +158,6 @@ class ScpPackage():
             self.sequence = bytes([0])
         else:
             raise "Bad sequence number!"
-
 
     def print_package(self):
         print("sequence: ", self.sequence[0])
@@ -177,9 +172,53 @@ class ScpPackage():
         print("syn: ", self.syn)
         print("fin: ", self.fin)
 
-
     def checksum_str(self):
         return str(self.checksum[0]) + " " + str(self.checksum[1])
+
+
+class ScpLogger():
+# event time ack-number type-of-packet seq-number number-of-bytes-data
+    def __init__(self, log_file):
+        self.log_file = log_file
+        self.start_time = time.time()
+        # create log_file, wirte title to it
+        title = '{:10}{:>5}{:>10}{:>10}{:>10}{:>10}{:>10}\n'.format(\
+                "event", "time", "ack",\
+                "flag", "seq", "size", "checksum")
+        with open(self.log_file, 'w+') as fd:
+            fd.write(title)
+
+
+    def log(self, event, scp_package):
+        # generate time
+        event_time = '{:.2f}'.format(time.time() - self.start_time)
+        # generate flag
+        flag = ''
+        if (scp_package.ack):
+            if (flag):
+                flag += '/'
+            flag += 'A'
+        if (scp_package.fin):
+            if (flag):
+                flag += '/'
+            flag += 'F'
+        if (scp_package.syn):
+            if (flag):
+                flag += '/'
+            flag += 'S'
+        if (not flag):
+            flag = 'D'
+        # generate line
+        line = '{:10}{:>5}{:>10}{:>10}{:>10}{:>10}{:>10}\n'.format(\
+                event, event_time, scp_package.acknowledge[0],\
+                flag, scp_package.sequence[0],\
+                len(scp_package.payload),\
+                scp_package.checksum_str())
+        # write line to log
+        with open(self.log_file, 'a') as fd:
+            fd.write(line)
+
+
 
 
 if __name__ == '__main__':
@@ -195,7 +234,13 @@ if __name__ == '__main__':
     data = b'123456abcdef'
     package = ScpPackage(data)
     package.print_package()
-    print(package.checksum_str())
-    package.fin = False
-    package.make_flag()
-    package.print_package()
+    # print(package.checksum_str())
+    # package.fin = False
+    # package.make_flag()
+    # package.print_package()
+
+
+    # test scplogger
+    logger = ScpLogger("log.txt")
+    time.sleep(0.5)
+    logger.log("send", package)

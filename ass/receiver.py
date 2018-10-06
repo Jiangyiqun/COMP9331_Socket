@@ -1,7 +1,7 @@
 # receiver receiver_port file_r.pdf
 import socket
 import argparse
-from scp import ScpPackage
+from scp import ScpPackage, ScpLogger
 
 
 def get_args ():
@@ -24,12 +24,16 @@ class Receiver():
         # create the socket
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.bind(receiver_addr)
+        # create a logger
+        self.logger = ScpLogger('Receiver_log.txt')
         print("Receiver is listening on:", receiver_addr, "\n")
 
 
     def receive_package(self):
         package, self.sender_addr = self.sock.recvfrom(self.buffer_size)
         self.sender_pkg.extract_package(package)
+        self.logger.log('rcv', self.sender_pkg)
+        
 
 
     def send_package(self):
@@ -37,6 +41,7 @@ class Receiver():
         sent_bytes = self.sock.sendto(\
                 self.receiver_pkg.package, self.sender_addr)
         print("send package", self.receiver_pkg.acknowledge[0])
+        self.logger.log('snd', self.receiver_pkg)
         return sent_bytes
 
     def receive(self):
@@ -74,6 +79,7 @@ class Receiver():
                             self.sender_pkg.checksum_str())
                     self.receiver_pkg.acknowledge = self.last_sequence
                     self.send_package()
+                    
                     return True
                 else:
                     # not corrupted & duplicated package

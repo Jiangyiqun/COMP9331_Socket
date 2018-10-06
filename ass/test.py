@@ -1,1 +1,3 @@
-0123456789ABCDE
+import logging
+log = logging.getLogger("my-logger")
+log.info("Hello, world")
