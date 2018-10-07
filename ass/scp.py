@@ -159,6 +159,17 @@ class ScpPackage():
         else:
             raise "Bad sequence number!"
 
+
+    def flip_a_bit(self):
+        self.flag = bytes([self.flag[0] ^ (1<<7)]) 
+        self.package = self.sequence\
+                                + self.acknowledge\
+                                + self.flag\
+                                + self.window\
+                                + self.checksum\
+                                + self.payload
+
+
     def print_package(self):
         print("sequence: ", self.sequence[0])
         print("acknowledge: ", self.acknowledge[0])
@@ -187,6 +198,10 @@ class ScpLogger():
                 "flag", "seq", "size", "checksum")
         with open(self.log_file, 'w+') as fd:
             fd.write(title)
+
+
+    def reset_timer(self):
+        self.start_time = time.time()
 
 
     def log(self, event, scp_package):
@@ -230,10 +245,28 @@ if __name__ == '__main__':
     # if (Checksum.validate_checksum(msg_with_checksum)):
     #     print("checksum is valid!")
 
-    # test package
+    # test flip a bit
     data = b'123456abcdef'
     package = ScpPackage(data)
-    package.print_package()
+    package.make_package()
+    if (package.validate_package()):
+        print("checksum is valid!")
+    else: 
+        print("checksum is invalid!")
+    package.flip_a_bit()
+    if (package.validate_package()):
+        print("checksum is valid!")
+    else: 
+        print("checksum is invalid!")
+    package.flip_a_bit()
+    if (package.validate_package()):
+        print("checksum is valid!")
+    else: 
+        print("checksum is invalid!")
+    # test package
+    # data = b'123456abcdef'
+    # package = ScpPackage(data)
+    # package.print_package()
     # print(package.checksum_str())
     # package.fin = False
     # package.make_flag()
@@ -241,6 +274,6 @@ if __name__ == '__main__':
 
 
     # test scplogger
-    logger = ScpLogger("log.txt")
-    time.sleep(0.5)
-    logger.log("send", package)
+    # logger = ScpLogger("log.txt")
+    # time.sleep(0.5)
+    # logger.log("send", package)

@@ -32,17 +32,16 @@ class Receiver():
     def receive_package(self):
         package, self.sender_addr = self.sock.recvfrom(self.buffer_size)
         self.sender_pkg.extract_package(package)
-        self.logger.log('rcv', self.sender_pkg)
-        
 
+        
 
     def send_package(self):
         self.receiver_pkg.make_package()
         sent_bytes = self.sock.sendto(\
                 self.receiver_pkg.package, self.sender_addr)
         print("send package", self.receiver_pkg.acknowledge[0])
-        self.logger.log('snd', self.receiver_pkg)
         return sent_bytes
+
 
     def receive(self):
         # Usage: not_finish = receive(timeout)
@@ -51,19 +50,22 @@ class Receiver():
         while(True):
             # stop and wait to receive from the sender
             self.receive_package()
+            
             # when received a fin, then ack on it
             # wait untill a not fin is received
             while (self.sender_pkg.fin):
+                self.logger.log('rcv', self.sender_pkg)
                 # send fin & ack and wait
                 self.receiver_pkg.fin = True
                 self.receiver_pkg.ack = True
                 self.receiver_pkg.make_package()
                 self.send_package()
+                self.logger.log('snd', self.receiver_pkg)
                 self.receive_package()
             # there must not have a fin bit
             if (self.sender_pkg.ack):
+                self.logger.log('rcv', self.sender_pkg)
                 self.receiver_pkg.fin = False
-                self.receiver_pkg.ack = False
                 self.sock.close()
                 print("Connection terminated!")
                 return False
@@ -71,6 +73,7 @@ class Receiver():
             # check the package and send ack
             if (self.sender_pkg.validate_package()):
                 if (self.last_sequence != self.sender_pkg.sequence):
+                    self.logger.log('rcv', self.sender_pkg)
                     # not corrupted & new package
                     self.last_sequence = self.sender_pkg.sequence
                     print("received package",\
@@ -79,40 +82,48 @@ class Receiver():
                             self.sender_pkg.checksum_str())
                     self.receiver_pkg.acknowledge = self.last_sequence
                     self.send_package()
+                    self.logger.log('snd', self.receiver_pkg)
                     
                     return True
                 else:
                     # not corrupted & duplicated package
+                    self.logger.log('rcv', self.sender_pkg)
                     print("received package:",\
                             self.sender_pkg.sequence[0],\
                             "duplicate with checksum",\
                             self.sender_pkg.checksum_str())
                     self.receiver_pkg.acknowledge = self.last_sequence
                     self.send_package()
+                    self.logger.log('snd/DA', self.receiver_pkg)
             else:   
                 # corrupted package
+                self.logger.log('rcv/corr', self.sender_pkg)
                 print("received package:",\
                         self.sender_pkg.sequence[0],\
                         "corrupted with checksum",\
                         self.sender_pkg.checksum_str())
                 self.receiver_pkg.acknowledge = self.last_sequence
                 self.send_package()
+                self.logger.log('snd/DA', self.receiver_pkg)
 
 
     def listen(self):
         while(True):
             # wait syn
             self.receive_package()
+            self.logger.reset_timer()
             if (self.sender_pkg.syn):
+                self.logger.log('rcv', self.sender_pkg)
                 # send syn & ack and wait
                 self.receiver_pkg.syn = True
                 self.receiver_pkg.ack = True
                 self.receiver_pkg.make_package()
                 self.send_package()
+                self.logger.log('snd', self.receiver_pkg)
                 self.receive_package()
                 if ((not self.sender_pkg.syn) and self.sender_pkg.ack):
+                    self.logger.log('rcv', self.sender_pkg)
                     self.receiver_pkg.syn = False
-                    self.receiver_pkg.ack = False
                     print("Connection estabilished!")
                     return
 

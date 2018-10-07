@@ -3,6 +3,7 @@
 
 import socket
 import argparse
+import random
 from scp import ScpPackage, ScpLogger
 
 
@@ -20,14 +21,14 @@ def get_args ():
     # parser.add_argument('MWS', type=str)
     # parser.add_argument('MSS', type=str)
     # parser.add_argument('gamma', type=str)
-    # parser.add_argument('pDrop', type=str)
-    # parser.add_argument('pDuplicate', type=str)
-    # parser.add_argument('pCorrupt', type=str)
+    parser.add_argument('pDrop', type=float)
+    parser.add_argument('pDuplicate', type=float)
+    parser.add_argument('pCorrupt', type=float)
     # parser.add_argument('pOrder', type=str)
     # parser.add_argument('maxOrder', type=str)
     # parser.add_argument('pDelay', type=str)
     # parser.add_argument('maxDelay', type=str)
-    # parser.add_argument('seed', type=str)
+    parser.add_argument('seed', type=str)
     args = parser.parse_args()
     return args
 
@@ -35,22 +36,59 @@ def get_args ():
 
 
 class Sender():
-    def __init__(self, receiver_addr):
-        self.receiver_addr = receiver_addr
+    def __init__(self, args):
+        # get and parse the args
+        self.args = args
+        self.receiver_addr = (self.args.receiver_host_ip,\
+                self.args.receiver_port)
         # create scpPackage abstraction
         self.sender_pkg = ScpPackage()
         self.receiver_pkg = ScpPackage()
         # create the socket
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        # create the logger
+        self.logger = ScpLogger('Sender_log.txt')
+        # initialize the PLD module
+        random.seed(self.args.seed)
         print("Sender is ready\n")
 
 
     def send_package(self):
         sent_bytes = self.sock.sendto(\
-                self.sender_pkg.package, receiver_addr)
+                self.sender_pkg.package, self.receiver_addr)
         print("send package", self.sender_pkg.sequence[0],\
                 "with checksum",self.sender_pkg.checksum_str())
         return sent_bytes
+
+
+    def PLD_send_package(self):
+        if (random.random() < self.args.pDrop):
+            # pDrop
+            sent_bytes = 0
+            print("drop package", self.sender_pkg.sequence[0],\
+                    "with checksum",self.sender_pkg.checksum_str())
+        elif (random.random() < self.args.pDuplicate):
+            sent_bytes_1 = self.sock.sendto(\
+                    self.sender_pkg.package, self.receiver_addr)
+            sent_bytes_2 = self.sock.sendto(\
+                    self.sender_pkg.package, self.receiver_addr)
+            sent_bytes = sent_bytes_1 + sent_bytes_2
+            print("duplicate package", self.sender_pkg.sequence[0],\
+                    "with checksum",self.sender_pkg.checksum_str())
+        elif (random.random() < self.args.pCorrupt):
+            self.sender_pkg.flip_a_bit()
+            sent_bytes = self.sock.sendto(\
+                    self.sender_pkg.package, self.receiver_addr)
+            print("corrupted package", self.sender_pkg.sequence[0],\
+                    "with checksum",self.sender_pkg.checksum_str())
+            self.sender_pkg.flip_a_bit()
+        else:
+            sent_bytes = self.sock.sendto(\
+                    self.sender_pkg.package, self.receiver_addr)
+            print("send package", self.sender_pkg.sequence[0],\
+                    "with checksum",self.sender_pkg.checksum_str())
+        return sent_bytes
+
 
 
     def receive_package(self):
@@ -65,7 +103,7 @@ class Sender():
         while(True):    # resend untill receiving correct ack
             # send and wait
             while(True):
-                self.send_package()
+                self.PLD_send_package()
                 self.sock.settimeout(TIME_OUT)
                 try:
                     self.receive_package()
@@ -137,10 +175,8 @@ class Sender():
 if __name__ == '__main__':
     # get the arguments Sender
     args = get_args()
-    host = "0.0.0.0"
-    receiver_addr = (args.receiver_host_ip, args.receiver_port)
     # create instance of Sender
-    instance = Sender(receiver_addr)
+    instance = Sender(args)
     instance.connect()
     # read and send file
     with open(args.file, 'rb') as fd:
