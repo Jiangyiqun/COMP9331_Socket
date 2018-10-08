@@ -5,11 +5,19 @@
 No| segment     | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7
 --|-------------|---|---|---|---|---|---|---|---
 0 | sequence    |   |   |   |   |   |   |   |   
-1 | acknowledge |   |   |   |   |   |   |   |   
-2 | flag        |000|000|000|ACK|000|000|SYN|FIN
-3 | window      |   |   |   |   |   |   |   |   
-4 | checksum    |   |   |   |   |   |   |   |   
-5 | checksum    |   |   |   |   |   |   |   |   
+1 | sequence    |   |   |   |   |   |   |   |   
+2 | sequence    |   |   |   |   |   |   |   |   
+3 | sequence    |   |   |   |   |   |   |   |   
+4 | acknowledge |   |   |   |   |   |   |   |   
+5 | acknowledge |   |   |   |   |   |   |   |   
+6 | acknowledge |   |   |   |   |   |   |   |   
+7 | acknowledge |   |   |   |   |   |   |   |   
+8 | flag        |000|000|000|ACK|000|000|SYN|FIN
+9 | flag        |000|000|000|ACK|000|000|SYN|FIN
+10| window      |   |   |   |   |   |   |   |   
+11| window      |   |   |   |   |   |   |   |   
+12| checksum    |   |   |   |   |   |   |   |   
+13| checksum    |   |   |   |   |   |   |   |   
 . | payload     |   |   |   |   |   |   |   |   
 
 
