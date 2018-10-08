@@ -14,24 +14,26 @@ def get_args ():
 
 
 class Receiver():
-    def __init__(self, receiver_addr, buffer_size):
-        self.receiver_addr = receiver_addr
-        self.buffer_size = buffer_size
+    def __init__(self, args):
+        self.receiver_addr = ("0.0.0.0", args.receiver_port)
+        self.receiver_buffer = 4096
         self.sender_addr = ""
-        self.last_sequence = bytes([0, 0, 0, 1])
+        self.last_seq = bytes([0])
+        self.expected_seq = 0
         # create scpPackage abstraction
         self.sender_pkg = ScpPackage()
         self.receiver_pkg = ScpPackage()
         # create the socket
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.sock.bind(receiver_addr)
+        self.sock.bind(self.receiver_addr)
         # create a logger
         self.logger = ScpLogger('Receiver_log.txt')
-        print("Receiver is listening on:", receiver_addr)
+        print("Receiver is listening on:", self.receiver_addr)
 
 
     def receive_package(self):
-        package, self.sender_addr = self.sock.recvfrom(self.buffer_size)
+        package, self.sender_addr = \
+                self.sock.recvfrom(self.receiver_buffer)
         self.sender_pkg.extract_package(package)
 
         
@@ -51,6 +53,7 @@ class Receiver():
             # stop and wait to receive from the sender
             self.receive_package()
             
+            # Finish
             # when received a fin, then ack on it
             # wait untill a not fin is received
             while (self.sender_pkg.fin):
@@ -69,28 +72,39 @@ class Receiver():
                 self.sock.close()
                 print("Connection terminated!")
                 return False
-            # else this package then goes to next step
-            # check the package and send ack
+
+            # not Finish
+            #       this package then goes to next step
             if (self.sender_pkg.validate_package()):
-                if (self.last_sequence != self.sender_pkg.sequence):
+                # package is not corrupted
+                if (ScpMath.bytes_to_int(self.sender_pkg.sequence)\
+                         == self.expected_seq):
+                    # package is in order
                     self.logger.log('rcv', self.sender_pkg)
-                    # not corrupted & new package
-                    self.last_sequence = self.sender_pkg.sequence
-                    self.receiver_pkg.acknowledge = self.last_sequence
+                    # update last seq & expected sequence
+                    self.last_seq = self.sender_pkg.sequence
+                    self.expected_seq += len(self.sender_pkg.payload)
+                    # ACK on last received in order package
+                    self.receiver_pkg.acknowledge = self.last_seq
                     self.send_package()
                     self.logger.log('snd', self.receiver_pkg)
-                    
+                    # write to file and continue to receive
                     return True
                 else:
-                    # not corrupted & duplicated package
+                    # package is not in order(duplicated)
                     self.logger.log('rcv', self.sender_pkg)
-                    self.receiver_pkg.acknowledge = self.last_sequence
+                    # ACK on last received in order package
+                    self.receiver_pkg.acknowledge =\
+                            self.last_seq
                     self.send_package()
                     self.logger.log('snd/DA', self.receiver_pkg)
+                    # continue to receive
             else:   
-                # corrupted package
+                # package is corrupted
                 self.logger.log('rcv/corr', self.sender_pkg)
-                self.receiver_pkg.acknowledge = self.last_sequence
+                # ACK on last received in order package
+                self.receiver_pkg.acknowledge =\
+                            self.last_seq
                 self.send_package()
                 self.logger.log('snd/DA', self.receiver_pkg)
 
@@ -119,11 +133,8 @@ class Receiver():
 if __name__ == '__main__':
     # get the arguments Receiver
     args = get_args()
-    host = "0.0.0.0"
-    buffer_size = 1024
-    receiver_addr = (host, args.receiver_port)
     # create instance of Receiver
-    instance = Receiver(receiver_addr, buffer_size)
+    instance = Receiver(args)
     instance.listen()
 
 

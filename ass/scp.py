@@ -1,5 +1,7 @@
 import time
 
+HEADER_SIZE = 14
+
 class ScpMath():
     # Usage: 
     # checksum = checksumcalculate_checksum(msg)
@@ -223,6 +225,7 @@ class ScpLogger():
         title = '{:10}{:>5}{:>10}{:>10}{:>10}{:>10}{:>10}\n'.format(\
                 "event", "time", "ack",\
                 "flag", "seq", "size", "checksum")
+        print(title, end='')
         with open(self.log_file, 'w+') as fd:
             fd.write(title)
 
