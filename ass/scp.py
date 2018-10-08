@@ -1,6 +1,6 @@
 import time
 
-class Checksum():
+class ScpMath():
     # Usage: 
     # checksum = checksumcalculate_checksum(msg)
     #   msg: bytes type
@@ -53,24 +53,51 @@ class Checksum():
 
     @staticmethod
     def calculate_checksum(msg):
-        word_sum = Checksum.sum_up(msg)
+        word_sum = ScpMath.sum_up(msg)
         # print("word_sum =", hex(word_sum))
-        folded_word = Checksum.fold_up(word_sum)
+        folded_word = ScpMath.fold_up(word_sum)
         # print("folded_word =", hex(folded_word))
-        complement = Checksum.ones_complement(folded_word)
+        complement = ScpMath.ones_complement(folded_word)
         # print("complement =", hex(complement))
-        checksum = Checksum.word_to_bytes(complement)
+        checksum = ScpMath.word_to_bytes(complement)
         # print(checksum)
         return checksum
 
     @staticmethod
     def validate_checksum(msg):
-        word_sum = Checksum.sum_up(msg)
-        folded_word = Checksum.fold_up(word_sum)
+        word_sum = ScpMath.sum_up(msg)
+        folded_word = ScpMath.fold_up(word_sum)
         if (folded_word == 0xFFFF):
             return True
         else:
             return False
+
+
+    @staticmethod
+    # from https://coderwall.com/p/x6xtxq/
+    #       convert-bytes-to-int-or-int-to-bytes-in-python
+    def bytes_to_int(bytes):
+        result = 0
+
+        for b in bytes:
+            result = result * 256 + int(b)
+
+        return result
+
+
+    @staticmethod
+    # from https://coderwall.com/p/x6xtxq/
+    #       convert-bytes-to-int-or-int-to-bytes-in-python
+    # modified by Jack Jiang
+    def int_to_bytes(value, length):
+        result = []
+
+        for i in range(0, length):
+            result.append(value >> (i * 8) & 0xff)
+
+        result.reverse()
+
+        return bytes(result)
 
 
 
@@ -78,10 +105,10 @@ class ScpPackage():
     # scp package abstraction
     def __init__(self, package=None):
         # initialize the segment
-        self.sequence = bytes([0])
-        self.acknowledge = bytes([0])
-        self.flag = bytes([0])
-        self.window = bytes([0])
+        self.sequence = bytes([0, 0, 0, 0])
+        self.acknowledge = bytes([0, 0, 0, 0])
+        self.flag = bytes([0, 0])
+        self.window = bytes([0, 0])
         self.checksum = bytes([0, 0])
         # the data flow
         self.header = self.sequence\
@@ -101,13 +128,13 @@ class ScpPackage():
 
     def extract_package(self, package):
         self.package = package
-        self.sequence = self.package[0:1]
-        self.acknowledge = self.package[1:2]
-        self.flag = self.package[2:3]
-        self.window = self.package[3:4]
-        self.checksum = self.package[4:6]
-        self.header = self.package[0:6]
-        self.payload = self.package[6:]
+        self.sequence = self.package[0:4]
+        self.acknowledge = self.package[4:8]
+        self.flag = self.package[8:10]
+        self.window = self.package[10:12]
+        self.checksum = self.package[12:14]
+        self.header = self.package[0:14]
+        self.payload = self.package[14:]
         self.extract_flag()
 
     def extract_flag(self):
@@ -134,7 +161,7 @@ class ScpPackage():
             flag |= (1<<1)
         if (self.fin):
             flag |= (1<<0)
-        self.flag = bytes([flag])
+        self.flag = bytes([flag, 0])
 
     def make_package(self):
         self.make_flag()
@@ -142,40 +169,40 @@ class ScpPackage():
                                 + self.acknowledge\
                                 + self.flag\
                                 + self.window
-        self.checksum = Checksum.calculate_checksum(\
+        self.checksum = ScpMath.calculate_checksum(\
                         header_without_checksum\
                         + self.payload)
         self.header = header_without_checksum + self.checksum
         self.package = self.header + self.payload
 
     def validate_package(self):
-        return Checksum.validate_checksum(self.package)
+        return ScpMath.validate_checksum(self.package)
 
     def flip_sequence(self):
-        if (self.sequence == bytes([0])):
-            self.sequence = bytes([1])
-        elif (self.sequence == bytes([1])):
-            self.sequence = bytes([0])
+        if (self.sequence == bytes([0 ,0, 0, 0])):
+            self.sequence = bytes([0, 0, 0, 1])
+        elif (self.sequence == bytes([0, 0, 0, 1])):
+            self.sequence = bytes([0, 0, 0, 0])
         else:
             raise "Bad sequence number!"
 
 
     def flip_a_bit(self):
-        self.flag = bytes([self.flag[0] ^ (1<<7)]) 
+        self.flag = bytes([self.flag[0] ^ (1<<7), 0]) 
         self.package = self.sequence\
-                                + self.acknowledge\
-                                + self.flag\
-                                + self.window\
-                                + self.checksum\
-                                + self.payload
+                        + self.acknowledge\
+                        + self.flag\
+                        + self.window\
+                        + self.checksum\
+                        + self.payload
 
 
     def print_package(self):
-        print("sequence: ", self.sequence[0])
-        print("acknowledge: ", self.acknowledge[0])
-        print("flag: ", self.flag[0])
-        print("window: ", self.window[0])
-        print("checksum: ", self.checksum[0], self.checksum[1])
+        print("sequence: ", ScpMath.bytes_to_int(self.sequence))
+        print("acknowledge: ",ScpMath.bytes_to_int(self.acknowledge))
+        print("flag: ",ScpMath.bytes_to_int(self.flag))
+        print("window: ",ScpMath.bytes_to_int(self.window))
+        print("checksum: ",ScpMath.bytes_to_int(self.checksum))
         print("length of header: ", len(self.header))
         print("length of payload: ", len(self.payload))
         print("length of package: ", len(self.package))
@@ -225,10 +252,14 @@ class ScpLogger():
             flag = 'D'
         # generate line
         line = '{:10}{:>5}{:>10}{:>10}{:>10}{:>10}{:>10}\n'.format(\
-                event, event_time, scp_package.acknowledge[0],\
-                flag, scp_package.sequence[0],\
+                event,\
+                event_time,\
+                ScpMath.bytes_to_int(scp_package.acknowledge),\
+                flag,\
+                ScpMath.bytes_to_int(scp_package.sequence),\
                 len(scp_package.payload),\
-                scp_package.checksum_str())
+                ScpMath.bytes_to_int(scp_package.checksum))
+        print(line, end='')
         # write line to log
         with open(self.log_file, 'a') as fd:
             fd.write(line)
@@ -237,6 +268,7 @@ class ScpLogger():
 
 
 if __name__ == '__main__':
+    pass
     # test checksum
     # msg = bytes.fromhex('4500003044224000800600008c7c19acae241e2b')
     # checksum = Checksum.calculate_checksum(msg)
@@ -246,34 +278,38 @@ if __name__ == '__main__':
     #     print("checksum is valid!")
 
     # test flip a bit
-    data = b'123456abcdef'
-    package = ScpPackage(data)
-    package.make_package()
-    if (package.validate_package()):
-        print("checksum is valid!")
-    else: 
-        print("checksum is invalid!")
-    package.flip_a_bit()
-    if (package.validate_package()):
-        print("checksum is valid!")
-    else: 
-        print("checksum is invalid!")
-    package.flip_a_bit()
-    if (package.validate_package()):
-        print("checksum is valid!")
-    else: 
-        print("checksum is invalid!")
-    # test package
     # data = b'123456abcdef'
     # package = ScpPackage(data)
+    # package.make_package()
+    # if (package.validate_package()):
+    #     print("checksum is valid!")
+    # else: 
+    #     print("checksum is invalid!")
+    # package.flip_a_bit()
+    # if (package.validate_package()):
+    #     print("checksum is valid!")
+    # else: 
+    #     print("checksum is invalid!")
+    # package.flip_a_bit()
+    # if (package.validate_package()):
+    #     print("checksum is valid!")
+    # else: 
+    #     print("checksum is invalid!")
+
+
+    # test package
+    data = b'123456abcdef1234567890'
+    package = ScpPackage(data)
     # package.print_package()
-    # print(package.checksum_str())
-    # package.fin = False
-    # package.make_flag()
+    # # print(package.checksum_str())
+    # # package.fin = False
+    # # package.make_flag()
+    # # package.print_package()
+    # package.make_package()
     # package.print_package()
 
 
     # test scplogger
-    # logger = ScpLogger("log.txt")
-    # time.sleep(0.5)
-    # logger.log("send", package)
+    logger = ScpLogger("log.txt")
+    time.sleep(0.5)
+    logger.log("send", package)

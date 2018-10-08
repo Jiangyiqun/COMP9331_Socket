@@ -1,10 +1,11 @@
-# sender receiver_host_ip receiver_port file.pdf MWS MSS gamma
-#        pDrop pDuplicate pCorrupt pOrder maxOrder pDelay maxDelay seed
+# python3 sender.py receiver_host_ip receiver_port file.pdf MWS MSS gamma
+#          pDrop pDuplicate pCorrupt pOrder maxOrder pDelay maxDelay seed
+# python3 sender.py localhost 2333 test0.pdf 0 0 0 0
 
 import socket
 import argparse
 import random
-from scp import ScpPackage, ScpLogger
+from scp import ScpPackage, ScpLogger, ScpMath
 
 
 
@@ -56,8 +57,8 @@ class Sender():
     def send_package(self):
         sent_bytes = self.sock.sendto(\
                 self.sender_pkg.package, self.receiver_addr)
-        print("send package", self.sender_pkg.sequence[0],\
-                "with checksum",self.sender_pkg.checksum_str())
+        print("send package", ScpMath.bytes_to_int(self.sender_pkg.sequence),\
+                "with checksum",ScpMath.bytes_to_int(self.sender_pkg.checksum))
         return sent_bytes
 
 

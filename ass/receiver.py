@@ -1,7 +1,8 @@
-# receiver receiver_port file_r.pdf
+# python3 receiver.py receiver_port file_r.pdf
+# python3 receiver.py 2333 new.pdf
 import socket
 import argparse
-from scp import ScpPackage, ScpLogger
+from scp import ScpPackage, ScpLogger, ScpMath
 
 
 def get_args ():
@@ -17,7 +18,7 @@ class Receiver():
         self.receiver_addr = receiver_addr
         self.buffer_size = buffer_size
         self.sender_addr = ""
-        self.last_sequence = bytes([1])
+        self.last_sequence = bytes([0, 0, 0, 1])
         # create scpPackage abstraction
         self.sender_pkg = ScpPackage()
         self.receiver_pkg = ScpPackage()
@@ -26,7 +27,7 @@ class Receiver():
         self.sock.bind(receiver_addr)
         # create a logger
         self.logger = ScpLogger('Receiver_log.txt')
-        print("Receiver is listening on:", receiver_addr, "\n")
+        print("Receiver is listening on:", receiver_addr)
 
 
     def receive_package(self):
@@ -39,7 +40,6 @@ class Receiver():
         self.receiver_pkg.make_package()
         sent_bytes = self.sock.sendto(\
                 self.receiver_pkg.package, self.sender_addr)
-        print("send package", self.receiver_pkg.acknowledge[0])
         return sent_bytes
 
 
@@ -76,10 +76,6 @@ class Receiver():
                     self.logger.log('rcv', self.sender_pkg)
                     # not corrupted & new package
                     self.last_sequence = self.sender_pkg.sequence
-                    print("received package",\
-                            self.sender_pkg.sequence[0],\
-                            "corrected with checksum",\
-                            self.sender_pkg.checksum_str())
                     self.receiver_pkg.acknowledge = self.last_sequence
                     self.send_package()
                     self.logger.log('snd', self.receiver_pkg)
@@ -88,20 +84,12 @@ class Receiver():
                 else:
                     # not corrupted & duplicated package
                     self.logger.log('rcv', self.sender_pkg)
-                    print("received package:",\
-                            self.sender_pkg.sequence[0],\
-                            "duplicate with checksum",\
-                            self.sender_pkg.checksum_str())
                     self.receiver_pkg.acknowledge = self.last_sequence
                     self.send_package()
                     self.logger.log('snd/DA', self.receiver_pkg)
             else:   
                 # corrupted package
                 self.logger.log('rcv/corr', self.sender_pkg)
-                print("received package:",\
-                        self.sender_pkg.sequence[0],\
-                        "corrupted with checksum",\
-                        self.sender_pkg.checksum_str())
                 self.receiver_pkg.acknowledge = self.last_sequence
                 self.send_package()
                 self.logger.log('snd/DA', self.receiver_pkg)

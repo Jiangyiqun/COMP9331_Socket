@@ -13,7 +13,7 @@ No| segment     | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7
 6 | acknowledge |   |   |   |   |   |   |   |   
 7 | acknowledge |   |   |   |   |   |   |   |   
 8 | flag        |000|000|000|ACK|000|000|SYN|FIN
-9 | flag        |000|000|000|ACK|000|000|SYN|FIN
+9 | flag        |000|000|000|000|000|000|000|000
 10| window      |   |   |   |   |   |   |   |   
 11| window      |   |   |   |   |   |   |   |   
 12| checksum    |   |   |   |   |   |   |   |   
