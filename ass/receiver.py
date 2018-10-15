@@ -1,18 +1,10 @@
 # python3 receiver.py receiver_port file_r.pdf
 # python3 receiver.py 2333 new.pdf
-import socket
-import argparse
+import socket, argparse, time
 from scp import ScpPackage, ScpLogger, ScpMath
 
 
-def get_args ():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('receiver_port', type=int)
-    parser.add_argument('file_r', type=str)
-    args = parser.parse_args()
-    return args
-
-
+############################# Receiver Class ###########################
 class Receiver():
     def __init__(self, args):
         self.receiver_addr = ("0.0.0.0", args.receiver_port)
@@ -130,14 +122,18 @@ class Receiver():
                     return
 
 
+
+############################# Main Function ############################
 if __name__ == '__main__':
     # get the arguments Receiver
-    args = get_args()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('receiver_port', type=int)
+    parser.add_argument('file_r', type=str)
+    args = parser.parse_args()
+    
     # create instance of Receiver
     instance = Receiver(args)
     instance.listen()
-
-
 
     # receiver and write
     not_finish = instance.receive()
@@ -146,4 +142,5 @@ if __name__ == '__main__':
             fd.write(instance.sender_pkg.payload)
             not_finish = instance.receive()
     
+    # finish
     print("\nSave file", args.file_r, "from", instance.sender_addr)

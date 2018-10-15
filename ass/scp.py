@@ -2,6 +2,8 @@ import time
 
 HEADER_SIZE = 14
 
+
+####################### some basic helper functions ####################
 class ScpMath():
     # Usage: 
     # checksum = checksumcalculate_checksum(msg)
@@ -103,6 +105,7 @@ class ScpMath():
 
 
 
+######################## SCP Package Abstraction #######################
 class ScpPackage():
     # scp package abstraction
     def __init__(self, package=None):
@@ -216,6 +219,9 @@ class ScpPackage():
         return str(self.checksum[0]) + " " + str(self.checksum[1])
 
 
+
+
+############################### Logger #################################
 class ScpLogger():
 # event time ack-number type-of-packet seq-number number-of-bytes-data
     def __init__(self, log_file):
@@ -269,7 +275,7 @@ class ScpLogger():
 
 
 
-
+################################ Testing ###############################
 if __name__ == '__main__':
     pass
     # test checksum

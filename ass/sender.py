@@ -1,36 +1,76 @@
 # python3 sender.py receiver_host_ip receiver_port file.pdf MWS MSS gamma
 #          pDrop pDuplicate pCorrupt pOrder maxOrder pDelay maxDelay seed
-# python3 sender.py localhost 2333 test0.pdf 512 512 0 0 0 0
+# python3 sender.py localhost 2333 test0.pdf 512 512 4 0 0 0 0 0 0.2 100 0
 
 import socket, argparse, random, threading, time
 from scp import ScpPackage, ScpLogger, ScpMath, HEADER_SIZE
 
 
-DEFAULT_TIMEOUT = 0.5
+########################## RTTEstimator Class ##########################
+class RTTEstimator():
+    def __init__(self, gamma):
+        # varibles for calculating timeout
+        self.alpha = 0.125
+        self.beta = 0.25
+        self.gamma = gamma
+        self.estimate_interval = 5 # estimate every 10 packages
+        self.sample_start = 0
+        self.sample_end = 0
+        self.sampleRTT = 0
+        self.EstimatedRTT = 0.5
+        self.DevRTT = 0
+        self.timeout = self.EstimatedRTT
+        # other varibles
+        self.estimating = False # whether is estimating timeout or not
+        self.count = 0
+        self.seq = bytes([0, 0, 0, 0])
 
 
-def get_args ():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('receiver_host_ip', type=str)
-    parser.add_argument('receiver_port', type=int)
-    parser.add_argument('file', type=str)
-    parser.add_argument('MWS', type=int)
-    parser.add_argument('MSS', type=int)
-    # parser.add_argument('gamma', type=str)
-    parser.add_argument('pDrop', type=float)
-    parser.add_argument('pDuplicate', type=float)
-    parser.add_argument('pCorrupt', type=float)
-    # parser.add_argument('pOrder', type=str)
-    # parser.add_argument('maxOrder', type=str)
-    # parser.add_argument('pDelay', type=str)
-    # parser.add_argument('maxDelay', type=str)
-    parser.add_argument('seed', type=str)
-    args = parser.parse_args()
-    return args
+    def monitor_sender_package(self, seq):
+        # insert before send package
+        if (not self.estimating):
+            if (self.count >= self.estimate_interval):
+                # start estimate
+                self.estimating = True
+                self.count = 0
+                self.sample_start = time.time()
+                self.seq = seq
+            else:
+                self.count += 1
+
+    def monitor_receiver_package(self, ack):
+        # insert before receive package
+        if (self.estimating):
+            if (ack == self.seq):
+                # update timeout and finish estimate procedure
+                self.sample_end = time.time()
+                self.estimating = False
+                self.get_sampleRTT()
+                # print("sampleRTT =", self.sampleRTT)
+                self.get_EstimatedRTT()
+                # print("EstimatedRTT =", self.EstimatedRTT)
+                self.get_DevRTT()
+                # print("DevRTT =", self.DevRTT)
+                self.get_timeout()
+                print("timeout updated to:", self.timeout)
+
+    def get_sampleRTT(self):
+        self.sampleRTT = self.sample_end - self.sample_start
+
+    def get_EstimatedRTT(self):
+        self.EstimatedRTT = (1 - self.alpha) * self.EstimatedRTT\
+                          + self.alpha * self.sampleRTT
+
+    def get_DevRTT(self):
+        self.DevRTT = (1 - self.beta) * self.DevRTT\
+                    + self.beta * abs(self.sampleRTT - self.EstimatedRTT)
+
+    def get_timeout(self):
+        self.timeout = self.EstimatedRTT + self.gamma * self.DevRTT
 
 
 
-
+############################# Sender Class #############################
 class Sender():
     def __init__(self, args):
         # get and parse the args
@@ -41,9 +81,16 @@ class Sender():
         self.base_seq = 0
         self.next_seq = 0
         self.sender_buffer = {}
-        self.timeout = 0.5
+        self.estimator = RTTEstimator(self.args.gamma)
+        self.duplicated_ack = 0
         self.sender_timer = threading.Timer(\
-                self.timeout, self.retransmit_buffer) 
+                self.estimator.timeout, self.retransmit_buffer)
+        # for reorder send and delay send
+        self.reordered_pkg = ScpPackage()
+        self.delayed_pkg = ScpPackage()
+        # 0 means nothing in the queue
+        self.reorder_send_countdown = 0
+        self.delay_send_time = 0
         # create scpPackage abstraction
         self.sender_pkg = ScpPackage()
         self.receiver_pkg = ScpPackage()
@@ -64,9 +111,32 @@ class Sender():
 
 
     def PLD_send_package(self):
+        self.estimator.monitor_sender_package(self.sender_pkg.sequence)
+        sent_bytes = 0
+
+        # check for reorder send
+        if (self.reorder_send_countdown):
+            # something has been reorderd need to be sent
+            self.reorder_send_countdown -= 1
+            if (self.reorder_send_countdown == 0):
+                # now we can send
+                sent_bytes = self.sock.sendto(\
+                        self.reordered_pkg.package, self.receiver_addr)
+                self.logger.log('snd/rord', self.reordered_pkg)
+
+        # check for delayed send
+        if (self.delay_send_time):
+            # something has been reorderd need to be sent
+            now = time.time()
+            if (now >= self.delay_send_time):
+                # now we can send
+                sent_bytes = self.sock.sendto(\
+                        self.delayed_pkg.package, self.receiver_addr)
+                self.logger.log('snd/dely', self.reordered_pkg)
+                self.delay_send_time = 0 # clear the flag
+
+        # PLD module
         if (random.random() < self.args.pDrop):
-            # pDrop
-            sent_bytes = 0
             self.logger.log('drop', self.sender_pkg)
         elif (random.random() < self.args.pDuplicate):
             sent_bytes_1 = self.sock.sendto(\
@@ -82,6 +152,15 @@ class Sender():
                     self.sender_pkg.package, self.receiver_addr)
             self.logger.log('snd/corr', self.sender_pkg)
             self.sender_pkg.flip_a_bit()
+        elif (self.reorder_send_countdown == 0\
+                and random.random() < self.args.pOrder):
+            self.reordered_pkg.extract_package(self.sender_pkg.package)
+            self.reorder_send_countdown = self.args.maxOrder
+        elif (self.delay_send_time == 0\
+                and random.random() < self.args.pDelay):
+            self.delayed_pkg.extract_package(self.sender_pkg.package)
+            self.delay_send_time = time.time()\
+                    + self.args.maxDelay / 1000
         else:
             sent_bytes = self.sock.sendto(\
                     self.sender_pkg.package, self.receiver_addr)
@@ -89,17 +168,18 @@ class Sender():
         return sent_bytes
 
 
-
     def receive_package(self):
         package, receiver_address = self.sock.recvfrom(HEADER_SIZE)
         self.receiver_pkg.extract_package(package)
+        self.estimator.monitor_receiver_package(\
+                self.receiver_pkg.acknowledge)
         return receiver_address
 
 
     def restart_timer(self):
         self.sender_timer.cancel()
         self.sender_timer = threading.Timer(\
-                self.timeout, self.retransmit_buffer) 
+                self.estimator.timeout, self.retransmit_buffer) 
         self.sender_timer.start()
 
 
@@ -133,7 +213,7 @@ class Sender():
     # event 2: time out
     def retransmit_buffer(self):
         buffered_package = sorted(list(self.sender_buffer.keys()))
-        print("timeout! buffer is", buffered_package)
+        print("retransmit on buffer", buffered_package)
         sent_bytes = 0
         for seq in buffered_package:
             # send package
@@ -166,9 +246,18 @@ class Sender():
             if (len(self.sender_buffer)):
                 self.restart_timer()
                 print("restart timer for new base", self.base_seq)
+            # reset duplicated ack counter if valid ack received
+            self.duplicated_ack = 0
         else:
             # duplicated packages has been acked
             self.logger.log('rsv/DA', self.receiver_pkg)
+            # increse counter for fast retransmit
+            self.duplicated_ack += 1
+            # fast retransmit and reset counter
+            if (self.duplicated_ack >= 3):
+                self.retransmit_buffer()
+                self.duplicated_ack = 0
+            
 
 
 
@@ -196,6 +285,7 @@ class Sender():
 
     def finish(self):
         # clean the buffer
+        print("Finishing up!")
         while (self.sender_buffer):
             self.retransmit_buffer()
             self.receive_ack()
@@ -207,9 +297,9 @@ class Sender():
             self.sender_pkg.make_package()
             self.send_package()
             self.receive_package()
+            self.logger.log('rsv', self.receiver_pkg)
             # receive fin & ack
             if (self.receiver_pkg.fin and self.receiver_pkg.ack):
-                self.logger.log('rsv', self.receiver_pkg)
                 # send ack
                 self.sender_pkg.fin = False
                 self.sender_pkg.ack = True
@@ -223,12 +313,32 @@ class Sender():
                 return
 
 
+
+
+############################# Main Function ############################
 if __name__ == '__main__':
     # get the arguments Sender
-    args = get_args()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('receiver_host_ip', type=str)
+    parser.add_argument('receiver_port', type=int)
+    parser.add_argument('file', type=str)
+    parser.add_argument('MWS', type=int)
+    parser.add_argument('MSS', type=int)
+    parser.add_argument('gamma', type=int)
+    parser.add_argument('pDrop', type=float)
+    parser.add_argument('pDuplicate', type=float)
+    parser.add_argument('pCorrupt', type=float)
+    parser.add_argument('pOrder', type=float)
+    parser.add_argument('maxOrder', type=int, choices=range(0, 7))
+    parser.add_argument('pDelay', type=float)
+    parser.add_argument('maxDelay', type=float)
+    parser.add_argument('seed', type=str)
+    args = parser.parse_args()
+
     # create instance of Sender
     instance = Sender(args)
     instance.connect()
+
     # read and send file
     with open(args.file, 'rb') as fd:
         data = fd.read(args.MSS)
