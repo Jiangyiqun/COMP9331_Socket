@@ -2,7 +2,7 @@
 #          pDrop pDuplicate pCorrupt pOrder maxOrder pDelay maxDelay seed
 # python3 sender.py localhost 2333 test0.pdf 512 512 4 0 0 0 0 0 0.2 100 0
 
-import socket, argparse, random, threading, time
+import socket, argparse, random, threading, time, os
 from scp import ScpPackage, ScpLogger, ScpMath, HEADER_SIZE
 
 
@@ -98,6 +98,11 @@ class Sender():
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         # create the logger
         self.logger = ScpLogger('Sender_log.txt')
+        # for statistics
+        self.timeout_rxt_count = 0
+        self.fast_rxt_count = 0
+        self.finish_rxt_count = 0
+        self.send_without_pld = 0
         # initialize the PLD module
         random.seed(self.args.seed)
         print("Sender is ready")
@@ -106,6 +111,7 @@ class Sender():
     def send_package(self):
         sent_bytes = self.sock.sendto(\
                 self.sender_pkg.package, self.receiver_addr)
+        self.send_without_pld += 1
         self.logger.log('snd', self.sender_pkg)
         return sent_bytes
 
@@ -211,7 +217,7 @@ class Sender():
 
 
     # event 2: time out
-    def retransmit_buffer(self):
+    def retransmit_buffer(self, reason='timeout'):
         buffered_package = sorted(list(self.sender_buffer.keys()))
         print("retransmit on buffer", buffered_package)
         sent_bytes = 0
@@ -223,6 +229,14 @@ class Sender():
             self.sender_pkg.make_package()
             sent_bytes = self.sock.sendto(\
                 self.sender_pkg.package, self.receiver_addr)
+            if (reason == 'timeout'):
+                self.timeout_rxt_count += 1
+            elif (reason == 'fast'):
+                self.fast_rxt_count += 1
+            elif (reason == 'finish'):
+                self.finish_rxt_count += 1
+            else:
+                pass
             self.logger.log('snd/RXT', self.sender_pkg)
         self.restart_timer()
         return sent_bytes
@@ -255,11 +269,9 @@ class Sender():
             self.duplicated_ack += 1
             # fast retransmit and reset counter
             if (self.duplicated_ack >= 3):
-                self.retransmit_buffer()
+                self.retransmit_buffer(reason='fast')
                 self.duplicated_ack = 0
             
-
-
 
     def connect(self):
         while(True):
@@ -287,7 +299,7 @@ class Sender():
         # clean the buffer
         print("Finishing up!")
         while (self.sender_buffer):
-            self.retransmit_buffer()
+            self.retransmit_buffer(reason='finish')
             self.receive_ack()
         self.sender_timer.cancel()
         while(True):
@@ -309,10 +321,73 @@ class Sender():
                 self.sender_pkg.syn = False
                 self.sender_pkg.ack = False
                 self.sock.close()
+                self.write_statistic()
                 print("Connection terminated!")
                 return
 
 
+    def write_statistic(self):
+        statistic = ''
+        horizontal_line = '=' * 60 + '\n'
+
+        size_title = 'Size of the file (in Bytes):'
+        size_count = os.path.getsize(self.args.file)
+        size_line = '{:52}{:>7}\n'.format(size_title, size_count)
+        
+        all_title = 'Segments transmitted (including drop & RXT):'
+        all_count = 0
+        for keys in ['snd', 'drop', 'snd/corr', 'snd/rord', 'snd/DA',\
+                'snd/dely']:
+            all_count += self.logger.statistic_count[keys]
+        all_line = '{:52}{:>7}\n'.format(all_title, all_count)
+
+        pld_title = 'Number of Segments handled by PLD:'
+        pld_count = all_count - self.send_without_pld
+        pld_line = '{:52}{:>7}\n'.format(pld_title, pld_count)
+
+        drop_title = 'Number of Segments dropped:'
+        drop_count = self.logger.statistic_count['drop']
+        drop_line = '{:52}{:>7}\n'.format(drop_title, drop_count)
+
+        corr_title = 'Number of Segments Corrupted:'
+        corr_count = self.logger.statistic_count['snd/corr']
+        corr_line = '{:52}{:>7}\n'.format(corr_title, corr_count)
+
+        reorder_title = 'Number of Segments Re-ordered:'
+        reorder_count = self.logger.statistic_count['snd/rord']
+        reorder_line = '{:52}{:>7}\n'.format(reorder_title, reorder_count)
+
+        dupli_title = 'Number of Segments Duplicated:'
+        dupli_count = self.logger.statistic_count['snd/DA']
+        dupli_line = '{:52}{:>7}\n'.format(dupli_title, dupli_count)
+
+        delay_title = 'Number of Segments Delayed:'
+        delay_count = self.logger.statistic_count['snd/dely']
+        delay_line = '{:52}{:>7}\n'.format(delay_title, delay_count)
+
+        timeout_title = 'Number of Retransmissions due to TIMEOUT:'
+        timeout_count = self.timeout_rxt_count
+        timeout_line = '{:52}{:>7}\n'.format(timeout_title, timeout_count)
+
+        fast_title = 'Number of FAST RETRANSMISSION:'
+        fast_count = self.fast_rxt_count
+        fast_line = '{:52}{:>7}\n'.format(fast_title, fast_count)
+
+        dupack_title = 'Number of DUP ACKS received:'
+        dupack_count = self.logger.statistic_count['rsv/DA']
+        dupack_line = '{:52}{:>7}\n'.format(dupack_title, dupack_count)
+
+        statistic = horizontal_line\
+                + size_line + all_line + pld_line\
+                + drop_line + corr_line + reorder_line\
+                + dupli_line + delay_line + timeout_line\
+                + fast_line + dupack_line\
+                + horizontal_line
+
+        print(statistic)
+
+        with open(self.logger.log_file, 'a') as fd:
+            fd.write(statistic)
 
 
 ############################# Main Function ############################

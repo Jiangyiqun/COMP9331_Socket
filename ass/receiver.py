@@ -20,7 +20,10 @@ class Receiver():
         self.sock.bind(self.receiver_addr)
         # create a logger
         self.logger = ScpLogger('Receiver_log.txt')
+        # used for statistics
+        self.handshake_rcv_count = 0
         print("Receiver is listening on:", self.receiver_addr)
+
 
 
     def receive_package(self):
@@ -49,6 +52,7 @@ class Receiver():
             # when received a fin, then ack on it
             # wait untill a not fin is received
             while (self.sender_pkg.fin):
+                self.handshake_rcv_count += 1
                 self.logger.log('rcv', self.sender_pkg)
                 # send fin & ack and wait
                 self.receiver_pkg.fin = True
@@ -59,10 +63,12 @@ class Receiver():
                 self.receive_package()
             # there must not have a fin bit
             if (self.sender_pkg.ack):
+                self.handshake_rcv_count += 1
                 self.logger.log('rcv', self.sender_pkg)
                 self.receiver_pkg.fin = False
                 self.sock.close()
                 print("Connection terminated!")
+                self.write_statistic()
                 return False
 
             # not Finish
@@ -84,7 +90,7 @@ class Receiver():
                     return True
                 else:
                     # package is not in order(duplicated)
-                    self.logger.log('rcv', self.sender_pkg)
+                    self.logger.log('rcv/DA', self.sender_pkg)
                     # ACK on last received in order package
                     self.receiver_pkg.acknowledge =\
                             self.last_seq
@@ -107,6 +113,7 @@ class Receiver():
             self.receive_package()
             self.logger.reset_timer()
             if (self.sender_pkg.syn):
+                self.handshake_rcv_count += 1
                 self.logger.log('rcv', self.sender_pkg)
                 # send syn & ack and wait
                 self.receiver_pkg.syn = True
@@ -116,11 +123,57 @@ class Receiver():
                 self.logger.log('snd', self.receiver_pkg)
                 self.receive_package()
                 if ((not self.sender_pkg.syn) and self.sender_pkg.ack):
+                    self.handshake_rcv_count += 1
                     self.logger.log('rcv', self.sender_pkg)
                     self.receiver_pkg.syn = False
                     print("Connection estabilished!")
                     return
 
+
+    def write_statistic(self):
+        # print(self.logger.statistic_bytes)
+        # print(self.logger.statistic_count)
+        # print(self.handshake_rcv_count)
+        statistic = ''
+        horizontal_line = '=' * 60 + '\n'
+
+        size_title = 'Amount of data received (bytes):'
+        size_count = self.logger.statistic_bytes['rcv']
+        size_line = '{:52}{:>7}\n'.format(size_title, size_count)
+        
+        total_title = 'Total Segments Received:'
+        total_count = self.logger.statistic_count['rcv']\
+                + self.logger.statistic_count['rcv/DA']\
+                + self.logger.statistic_count['rcv/corr']\
+                - self.handshake_rcv_count
+        total_line = '{:52}{:>7}\n'.format(total_title, total_count)
+
+        data_title = 'Data segments received:'
+        data_count = self.logger.statistic_count['rcv']\
+                - self.handshake_rcv_count
+        data_line = '{:52}{:>7}\n'.format(data_title, data_count)
+
+        corr_title = 'Data segments with Bit Errors:'
+        corr_count = self.logger.statistic_count['rcv/corr']
+        corr_line = '{:52}{:>7}\n'.format(corr_title, corr_count)
+
+        rcv_da_title = 'Duplicate data segments received:'
+        rcv_da_count = self.logger.statistic_count['rcv/DA']
+        rcv_da_line = '{:52}{:>7}\n'.format(rcv_da_title, rcv_da_count)
+
+        snd_da_title = 'Duplicate ACKs sent:'
+        snd_da_count = self.logger.statistic_count['snd/DA']
+        snd_da_line = '{:52}{:>7}\n'.format(snd_da_title, snd_da_count)
+
+
+        statistic = horizontal_line\
+                + size_line + total_line + data_line + corr_line + rcv_da_line + snd_da_line\
+                + horizontal_line
+
+        print(statistic)
+
+        with open(self.logger.log_file, 'a') as fd:
+            fd.write(statistic)
 
 
 ############################# Main Function ############################
