@@ -1,4 +1,5 @@
 import time
+from collections import defaultdict
 
 HEADER_SIZE = 14
 
@@ -227,6 +228,9 @@ class ScpLogger():
     def __init__(self, log_file):
         self.log_file = log_file
         self.start_time = time.time()
+        # statistic
+        self.statistic_count = defaultdict(int)
+        self.statistic_bytes = defaultdict(int)
         # create log_file, wirte title to it
         title = '{:10}{:>5}{:>10}{:>10}{:>10}{:>10}{:>10}\n'.format(\
                 "event", "time", "ack",\
@@ -272,6 +276,9 @@ class ScpLogger():
         # write line to log
         with open(self.log_file, 'a') as fd:
             fd.write(line)
+        # generate statistics
+        self.statistic_count[event] += 1
+        self.statistic_bytes[event] += len(scp_package.payload)
 
 
 
