@@ -10,7 +10,7 @@ class Receiver():
         self.receiver_addr = ("0.0.0.0", args.receiver_port)
         self.receiver_buffer = 4096
         self.sender_addr = ""
-        self.last_seq = bytes([0])
+        self.last_seq = bytes([255, 255, 255, 255])
         self.expected_seq = 0
         # create scpPackage abstraction
         self.sender_pkg = ScpPackage()
@@ -51,25 +51,30 @@ class Receiver():
             # Finish
             # when received a fin, then ack on it
             # wait untill a not fin is received
-            while (self.sender_pkg.fin):
+            if (self.sender_pkg.fin):
                 self.handshake_rcv_count += 1
                 self.logger.log('rcv', self.sender_pkg)
-                # send fin & ack and wait
-                self.receiver_pkg.fin = True
+                # send  ack and wait
+                self.receiver_pkg.fin = False
                 self.receiver_pkg.ack = True
                 self.receiver_pkg.make_package()
                 self.send_package()
                 self.logger.log('snd', self.receiver_pkg)
+                # send  fin and wait
+                self.receiver_pkg.fin = True
+                self.receiver_pkg.ack = False
+                self.receiver_pkg.make_package()
+                self.send_package()
+                self.logger.log('snd', self.receiver_pkg)
+                # wait ack
                 self.receive_package()
-            # there must not have a fin bit
-            if (self.sender_pkg.ack):
                 self.handshake_rcv_count += 1
                 self.logger.log('rcv', self.sender_pkg)
-                self.receiver_pkg.fin = False
-                self.sock.close()
-                print("Connection terminated!")
-                self.write_statistic()
-                return False
+                if (self.sender_pkg.ack):
+                    self.sock.close()
+                    print("Connection terminated!")
+                    self.write_statistic()
+                    return False
 
             # not Finish
             #       this package then goes to next step

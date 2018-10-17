@@ -138,7 +138,7 @@ class Sender():
                 # now we can send
                 sent_bytes = self.sock.sendto(\
                         self.delayed_pkg.package, self.receiver_addr)
-                self.logger.log('snd/dely', self.reordered_pkg)
+                self.logger.log('snd/dely', self.delayed_pkg)
                 self.delay_send_time = 0 # clear the flag
 
         # PLD module
@@ -246,7 +246,7 @@ class Sender():
         self.receive_package()
         ack_value =\
                 ScpMath.bytes_to_int(self.receiver_pkg.acknowledge)
-        if (ack_value >= self.base_seq):
+        if (ack_value >= self.base_seq and ack_value != 4294967295):
             # new packages has been acked
             self.logger.log('rsv', self.receiver_pkg)
             # update base sequence number
@@ -303,23 +303,30 @@ class Sender():
             self.receive_ack()
         self.sender_timer.cancel()
         while(True):
-            # send fin and wait
+            # send fin
             self.sender_pkg.fin = True
             self.sender_pkg.payload = bytes()
             self.sender_pkg.make_package()
             self.send_package()
+            # fin_wait_1 state
+            print("enter fin wait 1 state")
             self.receive_package()
             self.logger.log('rsv', self.receiver_pkg)
-            # receive fin & ack
-            if (self.receiver_pkg.fin and self.receiver_pkg.ack):
-                # send ack
+            if (self.receiver_pkg.ack):
+                # fin_wait_2 state
+                print("enter fin wait 2 state")
+                break
+        while(True):
+            self.receive_package()
+            if (self.receiver_pkg.fin):
+                self.logger.log('rsv', self.receiver_pkg)
+                # time_wait_state
+                print("enter time wait state")
                 self.sender_pkg.fin = False
                 self.sender_pkg.ack = True
                 self.sender_pkg.make_package()
                 self.send_package()
                 # connection terminated
-                self.sender_pkg.syn = False
-                self.sender_pkg.ack = False
                 self.sock.close()
                 self.write_statistic()
                 print("Connection terminated!")

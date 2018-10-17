@@ -1,2 +1,0 @@
-event      time       ack      flag       seq      size  checksum
-send       0.50 892756322       F/S 825373492         8     12594
